@@ -10,7 +10,7 @@ import {
 } from "../../helpers/transactionHelpers/transactionMappers.js";
 import { sleep } from "../../../shared/utils/delay.js";
 
-import { createFundTransaction } from "../../services/fundTransactionService.js";
+import { createFundTransaction, handleReceiptOnEdit } from "../../services/fundTransactionService/fundTransactionService.js";
 import { fetchOriginalTransaction } from "../../helpers/transactionHelpers/modelFindHelper.js";
 import { applyStockDeltas } from "../../helpers/transactionHelpers/stockManager.js";
 import {
@@ -431,10 +431,23 @@ export const editTransaction = async (req, res) => {
       session,
     );
 
-    // Step 3: ✅ ADD THIS - Trigger offset after edit
+    // Step 9: ✅ - Trigger offset after edit
     await triggerOffsetAfterEdit(
       oldAccount,
       updatedTransaction,
+      userId,
+      session,
+    );
+
+
+    console.log("okey upto this");
+
+    // ========================================
+    // step 10: ✅ HANDLE RECEIPT CHANGES
+    // ========================================
+    const receiptResult = await handleReceiptOnEdit(
+      originalTransaction,
+      updatedData,
       userId,
       session,
     );

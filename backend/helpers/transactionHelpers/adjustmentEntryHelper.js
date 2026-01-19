@@ -2,7 +2,7 @@
 import AdjustmentEntry from "../../model/AdjustmentEntryModel.js";
 import { determineTransactionBehavior } from "./modelFindHelper.js";
 import { transactionTypeToModelName } from "./transactionMappers.js";
-
+import mongoose from "mongoose";
 /**
  * Create adjustment entries with proper tracking
  */
@@ -304,3 +304,123 @@ export const createFundTransactionAdjustmentEntry = async ({
 
   return adjustmentEntry;
 };
+
+
+/**
+ * Create adjustment entry for fund transaction deletion
+ * Records what was deleted for audit trail
+ */
+export const createFundTransactionDeletionAdjustmentEntry = async ({
+  originalTransaction,
+  transactionType,
+  deletedSettlements,
+  deletedCashBankEntry,
+  deletedBy,
+  reason,
+  session,
+}) => {
+  console.log("\n📋 Creating deletion adjustment entry...");
+
+  const AdjustmentEntry = mongoose.model("AdjustmentEntry");
+
+  // Generate adjustment number
+  const adjustmentNumber = await AdjustmentEntry.generateAdjustmentNumber(
+    originalTransaction.company,
+    originalTransaction.branch,
+    session
+  );
+
+  // Map transaction type to model name
+  const modelNameMap = {
+    receipt: "Receipt",
+    payment: "Payment",
+    sale: "Sale",
+    purchase: "Purchase",
+    sales_return: "SalesReturn",
+    purchase_return: "PurchaseReturn",
+  };
+
+  const adjustmentEntry = new AdjustmentEntry({
+    // ========================================
+    // REFERENCE FIELDS
+    // ========================================
+    company: originalTransaction.company,
+    branch: originalTransaction.branch,
+
+    // ========================================
+    // ORIGINAL TRANSACTION REFERENCE
+    // ========================================
+    originalTransaction: originalTransaction._id,
+    originalTransactionModel: modelNameMap[transactionType] || "Receipt",
+    originalTransactionNumber: originalTransaction.transactionNumber,
+    originalTransactionDate: originalTransaction.transactionDate || new Date(),
+
+    // ========================================
+    // ADJUSTMENT METADATA
+    // ========================================
+    adjustmentNumber: adjustmentNumber,
+    adjustmentDate: new Date(),
+    adjustmentType: "amount_change", // Deletion is essentially amount going to 0
+
+    // ========================================
+    // AFFECTED ENTITIES
+    // ========================================
+    affectedAccount: originalTransaction.account,
+    affectedAccountName: originalTransaction.accountName,
+
+    // ========================================
+    // ADJUSTMENT DETAILS (Amount going to 0)
+    // ========================================
+    amountDelta: -originalTransaction.amount, // Negative because deletion
+    oldAmount: originalTransaction.amount,
+    newAmount: 0, // After deletion
+
+    // ========================================
+    // CASH/BANK IMPACT (Receipt/Payment)
+    // ========================================
+    cashBankImpact: {
+      accountId: deletedCashBankEntry.cashBankAccount,
+      accountName: deletedCashBankEntry.cashBankAccountName,
+      reversedLedgerEntry: deletedCashBankEntry._id,
+      newLedgerEntry: null, // No new entry (deleted)
+    },
+
+    // ========================================
+    // SETTLEMENT SUMMARY (Receipt/Payment)
+    // ========================================
+    settlementsSummary: {
+      oldSettlementsCount: deletedSettlements.length,
+      newSettlementsCount: 0, // All reversed, none created
+      outstandingsReversed: deletedSettlements.map(
+        (s) => s.outstandingNumber || s.transactionNumber || "Unknown"
+      ),
+      outstandingsSettled: [], // Empty after deletion
+    },
+
+    // ========================================
+    // AUDIT & REASON
+    // ========================================
+    reason: reason,
+    notes: `Receipt/Payment deleted - ${reason}`,
+    editedBy: deletedBy,
+
+    // ========================================
+    // STATUS & FLAGS
+    // ========================================
+    status: "active",
+    isSystemGenerated: true,
+    isReversed: false,
+  });
+
+  await adjustmentEntry.save({ session });
+
+  console.log("✅ Deletion adjustment entry created:", {
+    adjustmentNumber: adjustmentEntry.adjustmentNumber,
+    amountReversed: originalTransaction.amount,
+    settlementsReversed: deletedSettlements.length,
+  });
+
+  return adjustmentEntry;
+};
+
+

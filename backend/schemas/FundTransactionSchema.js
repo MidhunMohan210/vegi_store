@@ -4,13 +4,21 @@ import { nanoid } from "nanoid";
 // Base schema for fund transactions
 export const FundTransactionSchema = new mongoose.Schema(
   {
-    company: { type: mongoose.Schema.Types.ObjectId, ref: "Company", required: true },
-    branch: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", required: true },
+    company: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Company",
+      required: true,
+    },
+    branch: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+      required: true,
+    },
 
-    transactionType: { 
-      type: String, 
+    transactionType: {
+      type: String,
       enum: ["receipt", "payment"], // ✅ fixed spelling
-      required: true 
+      required: true,
     },
 
     transactionType: {
@@ -30,7 +38,11 @@ export const FundTransactionSchema = new mongoose.Schema(
     },
 
     transactionDate: { type: Date, required: true, default: Date.now },
-    account: { type: mongoose.Schema.Types.ObjectId, ref: "AccountMaster", required: true },
+    account: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "AccountMaster",
+      required: true,
+    },
     accountName: { type: String, required: true, trim: true },
     previousBalanceAmount: { type: Number, default: 0 },
     amount: { type: Number, required: true, min: 0 },
@@ -77,12 +89,42 @@ export const FundTransactionSchema = new mongoose.Schema(
     },
     referenceModel: {
       type: String,
-      enum: ["Sale", "Purchase"], 
+      enum: ["Sale", "Purchase"],
     },
 
-    referenceType:{
+    referenceType: {
       type: String,
       enum: ["sale", "purchase", "sales_return", "purchase_return"],
+    },
+
+    status: {
+      type: String,
+      enum: ["active", "cancelled", "voided"],
+      default: "active",
+      required: true,
+      index: true,
+    },
+
+    isCancelled: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+
+    cancelledAt: {
+      type: Date,
+      default: null,
+    },
+
+    cancelledBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    cancellationReason: {
+      type: String,
+      default: null,
     },
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
@@ -90,31 +132,35 @@ export const FundTransactionSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-   
-  }
+  },
 );
 
 // Indexes
 FundTransactionSchema.index({ company: 1, transactionNumber: 1 });
-FundTransactionSchema.index({ company: 1});
-FundTransactionSchema.index({ branch: 1,  });
+FundTransactionSchema.index({ company: 1 });
+FundTransactionSchema.index({ branch: 1 });
 FundTransactionSchema.index({ date: -1 });
 FundTransactionSchema.index({ account: 1, transactionType: 1 });
 FundTransactionSchema.index({ company: 1, branch: 1 });
+receiptSchema.index({ status: 1, company: 1, branch: 1 });
+receiptSchema.index({ isCancelled: 1, transactionDate: -1 });
+receiptSchema.index({ account: 1, status: 1, branch: 1 });
 
 FundTransactionSchema.statics.getPaginatedTransactions = async function (
   filter = {},
   page = 1,
   limit = 50,
-  sort = { date: -1, _id: -1 }
+  sort = { date: -1, _id: -1 },
 ) {
   const skip = (page - 1) * limit;
 
   const [total, transactions] = await Promise.all([
     this.countDocuments(filter),
     this.find(filter)
-      .populate('account', 'accountName')
-      .select('transactionNumber transactionDate amount previousBalanceAmount closingBalanceAmount settlementDetails')
+      .populate("account", "accountName")
+      .select(
+        "transactionNumber transactionDate amount previousBalanceAmount closingBalanceAmount settlementDetails",
+      )
       .sort(sort)
       .skip(skip)
       .limit(limit)
@@ -129,8 +175,8 @@ FundTransactionSchema.statics.getPaginatedTransactions = async function (
       limit: parseInt(limit),
       pages: Math.ceil(total / limit),
       hasMore: skip + transactions.length < total,
-      nextPage: skip + transactions.length < total ? page + 1 : null
-    }
+      nextPage: skip + transactions.length < total ? page + 1 : null,
+    },
   };
 };
 

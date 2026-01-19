@@ -31,6 +31,9 @@ export const useTransactionActions = (transactionData, isEditMode = false) => {
       const convertedTransactionData =
         convertStringNumbersToNumbers(transactionData);
 
+        console.log(transactionData);
+        
+
       /// while creating the transaction ,if use added the paid amount we are creating receipt automatically ,so for receipt we need to attach previousBalanceAmount
 
       // Choose mutation based on mode
@@ -38,7 +41,7 @@ export const useTransactionActions = (transactionData, isEditMode = false) => {
         // Update existing transaction
         await updateMutation
           .mutateAsync({
-            id: transactionData.id,
+            id: transactionData._id,
             formData: transactionData,
             transactionType: transactionData.transactionType,
           });

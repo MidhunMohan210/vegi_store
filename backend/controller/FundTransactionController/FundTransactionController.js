@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import { getTransactionModel } from "../../helpers/FundTransactionHelper/FundTransactionHelper.js";
-import { createFundTransaction, editFundTransaction } from "../../services/fundTransactionService.js";
+import { createFundTransaction, editFundTransaction } from "../../services/fundTransactionService/fundTransactionService.js";
 
 /**
  * Create a new cash transaction (Receipt or Payment)
