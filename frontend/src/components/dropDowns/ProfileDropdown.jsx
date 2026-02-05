@@ -44,6 +44,7 @@ import {
 import { useAuth } from "@/hooks/queries/auth.queries";
 import { userQueries } from "@/hooks/queries/user.queries";
 import RunRevaluation from "../Revaluation/RunRevaluation";
+import { setCurrentFY } from "@/store/slices/fySlice";
 
 // --- Memoized Sub-components ---
 
@@ -208,44 +209,80 @@ const ProfileDropdown = () => {
     }
   }, [isError, error]);
 
-  useEffect(() => {
-    if (loggedUser && !isLoading && !isError) {
-      const storedCompany = getLocalStorageItem("selectedCompany");
-      const storedBranch = getLocalStorageItem("selectedBranch");
-      const storedBranches = getLocalStorageItem("companyBranches");
 
-      if (!selectedCompanyFromStore && storedCompany)
-        dispatch(SetSelectedCompanyInStore(storedCompany));
-      if (!selectedBranchFromStore && storedBranch)
-        dispatch(SetSelectedBranchInStore(storedBranch));
-      if (storedBranches) dispatch(setBranchesInStore(storedBranches));
 
-      if (
-        !storedCompany &&
-        !selectedCompanyFromStore &&
-        loggedUser.access?.[0]
-      ) {
-        const { company, branches } = loggedUser.access[0];
-        if (company) {
-          dispatch(SetSelectedCompanyInStore(company));
-          setLocalStorageItem("selectedCompany", company);
-        }
-        if (branches?.length > 0) {
-          dispatch(SetSelectedBranchInStore(branches[0]));
-          setLocalStorageItem("selectedBranch", branches[0]);
-          dispatch(setBranchesInStore(branches));
-          setLocalStorageItem("companyBranches", branches);
-        }
+useEffect(() => {
+  if (loggedUser && !isLoading && !isError) {
+    const storedCompany = getLocalStorageItem("selectedCompany");
+    const storedBranch = getLocalStorageItem("selectedBranch");
+    const storedBranches = getLocalStorageItem("companyBranches");
+
+    // 1) Hydrate company/branch from localStorage into Redux (existing logic)
+    if (!selectedCompanyFromStore && storedCompany)
+      dispatch(SetSelectedCompanyInStore(storedCompany));
+    if (!selectedBranchFromStore && storedBranch)
+      dispatch(SetSelectedBranchInStore(storedBranch));
+    if (storedBranches) dispatch(setBranchesInStore(storedBranches));
+
+    // 2) If nothing stored, fall back to first access entry
+    if (
+      !storedCompany &&
+      !selectedCompanyFromStore &&
+      loggedUser.access?.[0]
+    ) {
+      const { company, branches } = loggedUser.access[0];
+
+      if (company) {
+        dispatch(SetSelectedCompanyInStore(company));
+        setLocalStorageItem("selectedCompany", company);
+      }
+
+      if (branches?.length > 0) {
+        dispatch(SetSelectedBranchInStore(branches[0]));
+        setLocalStorageItem("selectedBranch", branches[0]);
+        dispatch(setBranchesInStore(branches));
+        setLocalStorageItem("companyBranches", branches);
       }
     }
-  }, [
-    loggedUser,
-    isLoading,
-    isError,
-    dispatch,
-    selectedCompanyFromStore,
-    selectedBranchFromStore,
-  ]);
+
+    // 3) Decide the active company (priority: store > local > first access)
+    const firstAccess = loggedUser.access?.[0];
+    const activeCompany =
+      selectedCompanyFromStore ||
+      storedCompany ||
+      firstAccess?.company ||
+      null;
+
+    // 4) Push FY to Redux if available
+    //    If later you attach settings, change to activeCompany.settings?.financialYear
+    if (activeCompany?.financialYear) {
+      const fy = activeCompany.financialYear;
+      dispatch(
+        setCurrentFY({
+          currentFY: fy.currentFY,      // e.g. "2025-26" or "2025-2026"
+          startDate: fy.fyStartDate,   // ISO string from backend
+          endDate: fy.fyEndDate,
+        })
+      );
+    }else{
+      dispatch(
+        setCurrentFY({
+          currentFY: null,
+          startDate: null,
+          endDate: null,
+        })
+      );
+    }
+  }
+}, [
+  loggedUser,
+  isLoading,
+  isError,
+  dispatch,
+  selectedCompanyFromStore,
+  selectedBranchFromStore,
+]);
+
 
   useEffect(() => {
     if (selectedCompanyFromStore) setSelectedCompany(selectedCompanyFromStore);
@@ -472,7 +509,7 @@ const ProfileDropdown = () => {
             </DropdownMenuItem>
 
             <DropdownMenuItem
-              onClick={() => handleNavigate("/settings")}
+              onClick={() => handleNavigate("/settings/company-settings")}
               className="cursor-pointer text-xs py-2 rounded-md focus:bg-slate-50 text-slate-700"
             >
               <Settings className="w-4 h-4 mr-2 text-slate-500" />

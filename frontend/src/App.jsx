@@ -10,6 +10,8 @@ import MastersRoutes from "./routes/MastersRoutes";
 import TransactionRoutes from "./routes/TransactionRoutes";
 import ReportRoutes from "./routes/ReportRoutes";
 import StockAdjustmentPanel from "@/pages/StockAdjustment/StockAdjustmentPanel";
+import { Settings } from "lucide-react";
+import SettingsRoutes from "./routes/SettingsRoutes";
 const Login = lazy(() => import("./pages/Login"));
 const Home = lazy(() => import("./pages/home/Home"));
 
@@ -45,6 +47,7 @@ function App() {
           {MastersRoutes()}
           {TransactionRoutes()}
           {ReportRoutes()}
+          {SettingsRoutes()}
 
           <Route path="*" element={<NotFoundPage />} />
         </Route>

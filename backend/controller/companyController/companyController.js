@@ -2,17 +2,22 @@ import CompanyModel from "../../model/masters/CompanyModel.js";
 import mongoose from "mongoose";
 import AccountMasterModel from "../../model/masters/AccountMasterModel.js";
 import OutstandingModel from "../../model/OutstandingModel.js";
-import {PaymentModel,ReceiptModel} from "../../model/FundTransactionMode.js";
+import { PaymentModel, ReceiptModel } from "../../model/FundTransactionMode.js";
 import ItemMasterModel from "../../model/masters/ItemMasterModel.js";
-import {PurchaseModel,SalesModel} from "../../model/TransactionModel.js";
-import {SalesReturnModel,PurchaseReturnModel} from "../../model/TransactionModel.js";
+import { PurchaseModel, SalesModel } from "../../model/TransactionModel.js";
+import {
+  SalesReturnModel,
+  PurchaseReturnModel,
+} from "../../model/TransactionModel.js";
 import BranchModel from "../../model/masters/BranchModel.js";
 import UserModel from "../../model/userModel.js"; // Import the UserModel
 import AccountLedger from "../../model/AccountLedgerModel.js";
 import ItemLedger from "../../model/ItemsLedgerModel.js";
 import StockAdjustment from "../../model/StockAdjustmentModel.js";
+import { computeFYDates } from "../../utils/financialYear.js";
+import CompanySettingsModel from "../../model/CompanySettings.model.js";
 
-// ✅ Your existing createCompany function
+// ✅ Create Company + default FY settings
 export const createCompany = async (req, res) => {
   try {
     const {
@@ -35,43 +40,46 @@ export const createCompany = async (req, res) => {
       financialYear,
     } = req.body;
 
-
-    // Validate required fields
+    // 1) Validate required fields
     if (!companyName || !email) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: "Company name and email are required" 
+        message: "Company name and email are required",
       });
     }
 
-    // Validate financialYear format if provided
+    // 2) Validate financialYear format if provided
     if (financialYear?.format) {
       const validFormats = [
-        "april-march", "january-december", "february-january",
-        "march-february", "may-april", "june-may",
-        "july-june", "august-july", "september-august"
+        "april-march",
+        "january-december",
+        "february-january",
+        "march-february",
+        "may-april",
+        "june-may",
+        "july-june",
+        "august-july",
+        "september-august",
       ];
 
       if (!validFormats.includes(financialYear.format)) {
         return res.status(400).json({
           success: false,
-          message: "Invalid financial year format"
+          message: "Invalid financial year format",
         });
       }
     }
 
-
-    // Check if company already exists
-    const existingCompany = await CompanyModel.findOne({ companyName: companyName });
+    // 3) Check if company already exists
+    const existingCompany = await CompanyModel.findOne({ companyName });
     if (existingCompany) {
-      return res.status(409).json({ 
+      return res.status(409).json({
         success: false,
-        message: "Company already exists" 
+        message: "Company already exists",
       });
     }
 
-
-    // Prepare the new company object
+    // 4) Create company (format only matters here)
     const newCompany = new CompanyModel({
       companyName,
       companyType,
@@ -92,15 +100,35 @@ export const createCompany = async (req, res) => {
       financialYear: financialYear || { format: "april-march" },
     });
 
-
-    // Save to database (pre-save hook will calculate FY dates)
     const savedCompany = await newCompany.save();
 
+    // 5) Create default FY settings for this company
+    const companyId = savedCompany._id.toString();
+    const fyFormat = savedCompany.financialYear?.format || "april-march";
 
-    res.status(201).json({
+    // Default year: based on current date
+    const now = new Date();
+    const year = now.getFullYear();
+    const nextYear = year + 1;
+    const defaultFY = `${year}-${nextYear}`; // "2026-2027"
+
+    const { startDate, endDate } = computeFYDates(defaultFY, fyFormat);
+
+    const companySettings = await CompanySettingsModel.create({
+      company: companyId,
+      financialYear: {
+        currentFY: defaultFY,
+        startDate,
+        endDate,
+        lastChangedAt: new Date(),
+      },
+    });
+
+    // 6) Response
+    return res.status(201).json({
       success: true,
       message: "Company created successfully",
-      data: savedCompany,
+      data: { savedCompany, companySettings },
     });
   } catch (error) {
     console.error("Error creating company:", error);
@@ -144,7 +172,7 @@ const hasTransactions = async (companyId, transactionId = null) => {
   if (transactionId) {
     query._id = { $ne: transactionId };
   }
-  
+
   const collections = [
     SalesModel,
     PurchaseModel,
@@ -165,14 +193,12 @@ const hasTransactions = async (companyId, transactionId = null) => {
   return false;
 };
 
-
-//✅ Update company (FIXED - preserves FY data)
+// ✅ Update company (with FY format lock + settings sync)
 export const updateCompany = async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
 
-    // Check if company exists
     const company = await CompanyModel.findById(id);
     if (!company) {
       return res.status(404).json({
@@ -181,49 +207,56 @@ export const updateCompany = async (req, res) => {
       });
     }
 
-    // 🔒 Check if trying to update Financial Year FORMAT (months)
-    if (updateData.financialYear?.format && 
-        updateData.financialYear.format !== company.financialYear?.format) {
+    let formatChanged = false;
 
-      // Check if FY FORMAT is already locked
+    // 🔒 Check if trying to update Financial Year FORMAT (months)
+    if (
+      updateData.financialYear?.format &&
+      updateData.financialYear.format !== company.financialYear?.format
+    ) {
       if (company.financialYear?.formatLocked) {
         return res.status(403).json({
           success: false,
-          message: "Financial year format (months) is locked and cannot be changed after transactions exist. You can still change the year.",
+          message:
+            "Financial year format (months) is locked and cannot be changed after transactions exist. You can still change the year.",
           formatLockedAt: company.financialYear.formatLockedAt,
-          formatLockedReason: company.financialYear.formatLockedReason
+          formatLockedReason: company.financialYear.formatLockedReason,
         });
       }
 
-      // Check if company has any transactions
       const hasTransactionsFlag = await hasTransactions(id);
 
       if (hasTransactionsFlag) {
-        // Lock the FY FORMAT before rejecting
         company.financialYear.formatLocked = true;
         company.financialYear.formatLockedAt = new Date();
-        company.financialYear.formatLockedReason = "Transactions exist in AccountLedger or ItemLedger";
+        company.financialYear.formatLockedReason =
+          "Transactions exist in Sales/Purchase/Receipts/Payments/etc.";
         await company.save();
 
         return res.status(403).json({
           success: false,
-          message: "Cannot change financial year format (months). Transactions already exist. You can still change the year.",
-          hasTransactions: true
+          message:
+            "Cannot change financial year format (months). Transactions already exist. You can still change the year.",
+          hasTransactions: true,
         });
       }
+
+      // No transactions → format can be changed
+      formatChanged = true;
     }
 
-    // 🔧 FIX: Preserve existing FY data when updating other fields
+    // 🔧 Preserve existing FY data when updating other fields
     if (updateData.financialYear) {
-      // Merge with existing financialYear data instead of replacing
       updateData.financialYear = {
-        ...company.financialYear.toObject(), // Preserve existing FY data
-        ...updateData.financialYear,         // Apply updates
+        ...company.financialYear.toObject(),
+        ...updateData.financialYear,
       };
     }
 
-    // Check if updating to a name that already exists (excluding current company)
-    if (updateData.companyName && updateData.companyName !== company.companyName) {
+    if (
+      updateData.companyName &&
+      updateData.companyName !== company.companyName
+    ) {
       const existingCompany = await CompanyModel.findOne({
         companyName: updateData.companyName,
         _id: { $ne: id },
@@ -237,11 +270,62 @@ export const updateCompany = async (req, res) => {
       }
     }
 
-    // Apply updates to company document
     Object.assign(company, updateData);
-
-    // Save (pre-save hook will recalculate dates if format changed)
     const updatedCompany = await company.save();
+
+    // 🔁 If FY format changed, ensure settings exist and recalc dates
+    if (formatChanged) {
+      const companyId = updatedCompany._id.toString();
+
+      let settings = await CompanySettingsModel.findOne({ company: companyId });
+
+      // Determine currentFY to use for settings:
+      // 1) existing settings.currentFY
+      // 2) company.financialYear.currentFY (if you still fill it)
+      // 3) fallback from current date
+      let currentFY;
+      if (settings?.financialYear?.currentFY) {
+        currentFY = settings.financialYear.currentFY;
+      } else if (updatedCompany.financialYear?.currentFY) {
+        // if format is "2025-26", normalise to "2025-2026"
+        const parts = updatedCompany.financialYear.currentFY.split("-");
+        if (parts.length === 2 && parts[1].length === 2) {
+          const start = parseInt(parts[0], 10);
+          const end = start + 1;
+          currentFY = `${start}-${end}`;
+        } else {
+          currentFY = updatedCompany.financialYear.currentFY;
+        }
+      } else {
+        const now = new Date();
+        const y = now.getFullYear();
+        currentFY = `${y}-${y + 1}`;
+      }
+
+      const fyFormat = updatedCompany.financialYear.format || "april-march";
+      const { startDate, endDate } = computeFYDates(currentFY, fyFormat);
+
+      if (!settings) {
+        // No settings yet → create
+        settings = new CompanySettingsModel({
+          company: companyId,
+          financialYear: {
+            currentFY,
+            startDate,
+            endDate,
+            lastChangedAt: new Date(),
+          },
+        });
+      } else {
+        // Update existing
+        settings.financialYear.currentFY = currentFY;
+        settings.financialYear.startDate = startDate;
+        settings.financialYear.endDate = endDate;
+        settings.financialYear.lastChangedAt = new Date();
+      }
+
+      await settings.save();
+    }
 
     return res.status(200).json({
       success: true,
@@ -257,9 +341,8 @@ export const updateCompany = async (req, res) => {
   }
 };
 
-
 // 🔒 Lock Financial Year FORMAT (call this when first transaction is created)
-export const lockFinancialYearFormat = async (companyId,session) => {
+export const lockFinancialYearFormat = async (companyId, session) => {
   try {
     const company = await CompanyModel.findById(companyId);
 
@@ -281,21 +364,23 @@ export const lockFinancialYearFormat = async (companyId,session) => {
   }
 };
 
-
 /// 🆕 Unlock Financial Year FORMAT if no transactions exist
 
-export const unlockFinancialYearFormatIfNoTransactions = async (companyId,session,transactionId) => {
+export const unlockFinancialYearFormatIfNoTransactions = async (
+  companyId,
+  session,
+  transactionId,
+) => {
   const company = await CompanyModel.findById(companyId);
-  
+
   if (!company.financialYear?.formatLocked) {
     return company; // Already unlocked
   }
 
   // Check if any transactions still exist
-  const hasTransactionsFlag = await hasTransactions(companyId,transactionId);
+  const hasTransactionsFlag = await hasTransactions(companyId, transactionId);
 
   console.log("hasTransactionsFlag:", hasTransactionsFlag);
-  
 
   // If no transactions, unlock the format
   if (!hasTransactionsFlag) {
@@ -308,8 +393,6 @@ export const unlockFinancialYearFormatIfNoTransactions = async (companyId,sessio
   return company;
 };
 
-
-
 // 🆕 Update Financial Year (year only, format remains locked if transactions exist)
 export const updateFinancialYear = async (req, res) => {
   try {
@@ -319,7 +402,7 @@ export const updateFinancialYear = async (req, res) => {
     if (!currentFY || !/^\d{4}-\d{2}$/.test(currentFY)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid FY format. Expected format: YYYY-YY (e.g., 2026-27)"
+        message: "Invalid FY format. Expected format: YYYY-YY (e.g., 2026-27)",
       });
     }
 
@@ -327,7 +410,7 @@ export const updateFinancialYear = async (req, res) => {
     if (!company) {
       return res.status(404).json({
         success: false,
-        message: "Company not found"
+        message: "Company not found",
       });
     }
 
@@ -342,30 +425,31 @@ export const updateFinancialYear = async (req, res) => {
         currentFY: company.financialYear.currentFY,
         fyStartDate: company.financialYear.fyStartDate,
         fyEndDate: company.financialYear.fyEndDate,
-        formatLocked: company.financialYear.formatLocked
-      }
+        formatLocked: company.financialYear.formatLocked,
+      },
     });
   } catch (error) {
     console.error("Error updating financial year:", error);
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to update financial year"
+      message: error.message || "Failed to update financial year",
     });
   }
 };
-
 
 // Check FY lock status
 export const checkFYLockStatus = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const company = await CompanyModel.findById(id).select('financialYear').lean();
+    const company = await CompanyModel.findById(id)
+      .select("financialYear")
+      .lean();
 
     if (!company) {
       return res.status(404).json({
         success: false,
-        message: "Company not found"
+        message: "Company not found",
       });
     }
 
@@ -378,17 +462,18 @@ export const checkFYLockStatus = async (req, res) => {
         formatLockedAt: company.financialYear?.formatLockedAt || null,
         formatLockedReason: company.financialYear?.formatLockedReason || null,
         hasTransactions: hasTransactionsFlag,
-        canModifyFormat: !company.financialYear?.formatLocked && !hasTransactionsFlag,
+        canModifyFormat:
+          !company.financialYear?.formatLocked && !hasTransactionsFlag,
         canModifyYear: true, // ✅ Year can always be modified
         currentFY: company.financialYear?.currentFY,
-        format: company.financialYear?.format
-      }
+        format: company.financialYear?.format,
+      },
     });
   } catch (error) {
     console.error("Error checking FY lock status:", error);
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to check FY lock status"
+      message: error.message || "Failed to check FY lock status",
     });
   }
 };
@@ -485,8 +570,6 @@ export const searchCompanies = async (req, res) => {
   }
 };
 
-
-
 // ✅ NEW: Delete company
 const isCompanyReferenced = async (referencesToCheck, companyId) => {
   for (const ref of referencesToCheck) {
@@ -526,9 +609,9 @@ export const deleteCompany = async (req, res) => {
       { model: PaymentModel, field: "company" },
       { model: PurchaseModel, field: "company" },
       { model: SalesModel, field: "company" },
-      { model: UserModel, field: "company" }, 
-      {model:SalesReturnModel,field:"company"},
-      {model:PurchaseReturnModel,field:"company"},
+      { model: UserModel, field: "company" },
+      { model: SalesReturnModel, field: "company" },
+      { model: PurchaseReturnModel, field: "company" },
       // If users are linked to companies
       // Add more models as needed
     ];
@@ -540,7 +623,8 @@ export const deleteCompany = async (req, res) => {
       session.endSession();
       return res.status(400).json({
         success: false,
-        message: "Company is used in branches, accounts, transactions or other records and cannot be deleted.",
+        message:
+          "Company is used in branches, accounts, transactions or other records and cannot be deleted.",
       });
     }
 

@@ -31,6 +31,7 @@ import purchaseReturnRoutes from "./routes/transactions/purchase_return_routes.j
 import purchaseRoutes from "./routes/transactions/purchaseRoutes.js";
 import downloadRoutes from "./routes/downloadRoutes/downloadRoutes.js";
 import stockAdjustmentRoutes from "./routes/stockAdjustmentRoutes/stockAdjustmentRoutes.js";
+import companySettingsRoute from "./routes/settingsRoute/companySettingsRoute.js";
 
 // Add this line with your other routes
 
@@ -125,6 +126,7 @@ app.use("/api/job", authMiddleware, jobRoutes);
 app.use("/api/reports", authMiddleware, reportRoutes);
 app.use("/api/revaluation", authMiddleware, revaluationRoute);
 app.use("/api/download", authMiddleware, downloadRoutes);
+app.use("/api/settings/company-settings", authMiddleware, companySettingsRoute);
 
 // ----------------- Production Build Serving -----------------
 if (process.env.NODE_ENV === "production") {
