@@ -10,22 +10,35 @@ export const checkFYRange = (getDateField = "date") => {
       const txnDate = req.body[getDateField];
 
       if (!companyId || !txnDate) {
-        return next(); // or throw if mandatory
+        return res.status(400).json({
+          success: false,
+          message: "Company and transaction date are required.",
+        });
       }
 
       const settings = await CompanySettingsModel.findOne({ company: companyId })
         .select("financialYear")
         .lean();
 
-      if (!settings?.financialYear) return next();
+      if (!settings || !settings.financialYear) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Financial year settings not found for this company. Please configure financial year first.",
+        });
+      }
 
       const { startDate, endDate } = settings.financialYear;
-      if (!startDate || !endDate) return next();
+
+      if (!startDate || !endDate) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Financial year period is not properly configured for this company.",
+        });
+      }
 
       const d = new Date(txnDate);
-
-      console.log(startDate,endDate,d);
-      
 
       if (d < new Date(startDate) || d > new Date(endDate)) {
         return res.status(400).json({
@@ -44,3 +57,4 @@ export const checkFYRange = (getDateField = "date") => {
     }
   };
 };
+
