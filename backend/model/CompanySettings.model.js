@@ -34,4 +34,7 @@ const CompanySettingsSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+
+
+
 export default mongoose.model("CompanySettings", CompanySettingsSchema);

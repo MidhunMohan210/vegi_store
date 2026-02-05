@@ -12,28 +12,34 @@ const FY_FORMAT_MAP = {
 };
 
 export const computeFYDates = (currentFY, fyFormat) => {
-  const cfg = FY_FORMAT_MAP[fyFormat || "april-march"];
-  if (!cfg) throw new Error(`Unsupported FY format: ${fyFormat}`);
+  const format = fyFormat || "april-march";
+  const cfg = FY_FORMAT_MAP[format];
+  if (!cfg) throw new Error(`Unsupported FY format: ${format}`);
 
-  // currentFY can be "2026-27" or "2026-2027"
   const [startYearStr, rawEnd] = currentFY.split("-");
   const startYear = parseInt(startYearStr, 10);
 
   let endYear;
-  if (rawEnd.length === 2) {
-    const short = parseInt(rawEnd, 10);
-    const century = Math.floor(startYear / 100) * 100;
-    endYear = century + short; // 26-27 => 2026, 2027
+  if (format === "january-december") {
+    // 🔹 Special rule: Jan–Dec FY is within the SAME start year
+    endYear = startYear;
   } else {
-    endYear = parseInt(rawEnd, 10); // "2027"
+    // Normal cross-year logic: 2025-26 or 2025-2026 => 2025, 2026
+    if (rawEnd.length === 2) {
+      const short = parseInt(rawEnd, 10);
+      const century = Math.floor(startYear / 100) * 100;
+      endYear = century + short;
+    } else {
+      endYear = parseInt(rawEnd, 10);
+    }
   }
 
-  // ✅ Start date: first day of startMonth
+  // Start date: first day of start month
   const startDate = new Date(
     Date.UTC(startYear, cfg.startMonth - 1, 1, 0, 0, 0, 0)
   );
 
-  // ✅ End date: last day of endMonth
+  // End date: last day of end month
   const lastDay = new Date(Date.UTC(endYear, cfg.endMonth, 0)).getUTCDate();
   const endDate = new Date(
     Date.UTC(endYear, cfg.endMonth - 1, lastDay, 23, 59, 59, 999)
