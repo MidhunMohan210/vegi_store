@@ -13,6 +13,7 @@ const toObjectId = (id) => new mongoose.Types.ObjectId(id);
 
 /**
  * Calculate opening balances for multiple accounts at once (BATCHED)
+ * Now checks backward for clean periods dynamically instead of hard-coded base date
  */
 export const getBatchOpeningBalances = async (
   company,
@@ -31,14 +32,8 @@ export const getBatchOpeningBalances = async (
   const branchId = toObjectId(branch);
   const accountIdObjs = accountIds.map((id) => toObjectId(id));
 
-  const BASE_START_DATE = new Date("2025-04-01T00:00:00.000Z");
-
-  if (
-    !selectedDate ||
-    isNaN(selectedDate.getTime()) ||
-    selectedDate < BASE_START_DATE
-  ) {
-    console.log("Early return: Invalid or pre-base date detected");
+  if (!selectedDate || isNaN(selectedDate.getTime())) {
+    console.log("Early return: Invalid date detected");
     return accountIds.reduce((acc, id) => ({ ...acc, [id.toString()]: 0 }), {});
   }
 
@@ -52,7 +47,7 @@ export const getBatchOpeningBalances = async (
 
   console.log("Calculated previous month:", { prevYear, prevMonthNum });
 
-  // STEP 1: Get last CLEAN monthly balance
+  // STEP 1: Get last CLEAN monthly balance (look backward without date constraint)
   console.time("Step 1 - Monthly balances query");
   const monthlyBalances = await AccountMonthlyBalance.aggregate([
     {
@@ -80,47 +75,85 @@ export const getBatchOpeningBalances = async (
   console.timeEnd("Step 1 - Monthly balances query");
   console.log("Monthly balances found:", monthlyBalances.length);
 
-  // STEP 2: Fallback to AccountMaster
+  // STEP 2: For accounts without clean monthly balance, check if transactions exist
   const accountsWithBalances = monthlyBalances.map((m) => m._id.toString());
-  const accountsNeedingMaster = accountIdObjs.filter(
+  const accountsNeedingFallback = accountIdObjs.filter(
     (id) => !accountsWithBalances.includes(id.toString())
   );
 
-  console.log("Accounts needing master lookup:", accountsNeedingMaster.length);
+  console.log("Accounts needing fallback logic:", accountsNeedingFallback.length);
 
-  let masterBalances = [];
-  if (accountsNeedingMaster.length > 0) {
-    console.time("Step 2 - Account master query");
-    masterBalances = await AccountMasterModel.aggregate([
-      { $match: { _id: { $in: accountsNeedingMaster }, company: companyId } },
-      { $project: { _id: 1, openingBalance: 1 } },
-    ]);
-    console.timeEnd("Step 2 - Account master query");
-    console.log("Master balances found:", masterBalances.length);
-  }
-
-  // STEP 3: Build base balances
-  console.log("Step 3: Building base balances map");
   const baseBalances = {};
   const dirtyPeriodStarts = {};
 
+  // Add monthly balances to base
   monthlyBalances.forEach((mb) => {
     const accountKey = mb._id.toString();
     baseBalances[accountKey] = mb.closingBalance || 0;
     dirtyPeriodStarts[accountKey] = new Date(mb.year, mb.month, 1);
   });
 
+  // STEP 3: For remaining accounts, check if they have ANY transactions
+  let accountsWithTransactions = [];
+  if (accountsNeedingFallback.length > 0) {
+    console.time("Step 2a - Check transaction existence");
+    accountsWithTransactions = await AccountLedger.aggregate([
+      {
+        $match: {
+          company: companyId,
+          branch: branchId,
+          account: { $in: accountsNeedingFallback },
+          transactionDate: { $lt: selectedDate },
+        },
+      },
+      {
+        $group: {
+          _id: "$account",
+          earliestTransaction: { $min: "$transactionDate" },
+          hasTransactions: { $sum: 1 },
+        },
+      },
+    ]);
+    console.timeEnd("Step 2a - Check transaction existence");
+    console.log("Accounts with transactions:", accountsWithTransactions.length);
+  }
+
+  const accountsWithTxnIds = accountsWithTransactions.map((a) => a._id.toString());
+
+  // STEP 4: Fetch AccountMaster for ALL accounts needing fallback
+  // (Not just those with transactions - opening balance is needed regardless)
+  let masterBalances = [];
+  if (accountsNeedingFallback.length > 0) {
+    console.time("Step 2b - Account master query");
+    masterBalances = await AccountMasterModel.aggregate([
+      { $match: { _id: { $in: accountsNeedingFallback }, company: companyId } },
+      { $project: { _id: 1, openingBalance: 1 } },
+    ]);
+    console.timeEnd("Step 2b - Account master query");
+    console.log("Master balances found:", masterBalances.length);
+  }
+
+  // Add master balances
   masterBalances.forEach((master) => {
     const accountKey = master._id.toString();
     baseBalances[accountKey] = master.openingBalance || 0;
-    dirtyPeriodStarts[accountKey] = BASE_START_DATE;
+    
+    // Find earliest transaction date for this account (if exists)
+    const txnInfo = accountsWithTransactions.find(
+      (a) => a._id.toString() === accountKey
+    );
+    
+    // If account has transactions, dirty period starts from earliest transaction
+    // If no transactions, dirty period starts from selectedDate (so range is empty)
+    dirtyPeriodStarts[accountKey] = txnInfo?.earliestTransaction || selectedDate;
   });
 
-  accountIdObjs.forEach((id) => {
+  // For accounts that don't exist in AccountMaster at all, default to 0
+  accountsNeedingFallback.forEach((id) => {
     const accountKey = id.toString();
-    if (!baseBalances[accountKey]) {
+    if (baseBalances[accountKey] === undefined) {
       baseBalances[accountKey] = 0;
-      dirtyPeriodStarts[accountKey] = BASE_START_DATE;
+      dirtyPeriodStarts[accountKey] = selectedDate; // No dirty period
     }
   });
 
@@ -129,55 +162,65 @@ export const getBatchOpeningBalances = async (
   const dirtyPeriodEnd = new Date(selectedDate);
   dirtyPeriodEnd.setHours(0, 0, 0, 0);
 
-  // STEP 4: Get ledger movements
-  console.time("Step 4 - Ledger movements query");
-  const ledgerMatchConditions = accountIdObjs.map((id) => {
-    const accountKey = id.toString();
-    const startDate = dirtyPeriodStarts[accountKey] || BASE_START_DATE;
-    return {
-      account: id,
-      transactionDate: {
-        $gte: startDate,
-        $lt: dirtyPeriodEnd,
-      },
-    };
-  });
+  // STEP 5: Get ledger movements for dirty periods
+  console.time("Step 3 - Ledger movements query");
+  const ledgerMatchConditions = accountIdObjs
+    .map((id) => {
+      const accountKey = id.toString();
+      const startDate = dirtyPeriodStarts[accountKey];
+      
+      // Skip if no dirty period (e.g., no transactions exist)
+      if (!startDate || startDate >= dirtyPeriodEnd) {
+        return null;
+      }
+      
+      return {
+        account: id,
+        transactionDate: {
+          $gte: startDate,
+          $lt: dirtyPeriodEnd,
+        },
+      };
+    })
+    .filter(Boolean); // Remove null entries
 
-  const ledgerMovements = await AccountLedger.aggregate([
-    {
-      $match: {
-        company: companyId,
-        branch: branchId,
-        $or: ledgerMatchConditions,
-      },
-    },
-    {
-      $addFields: {
-        signedAmount: {
-          $multiply: [
-            "$amount",
-            { $cond: [{ $eq: ["$ledgerSide", "debit"] }, 1, -1] },
-          ],
+  let ledgerMovements = [];
+  if (ledgerMatchConditions.length > 0) {
+    ledgerMovements = await AccountLedger.aggregate([
+      {
+        $match: {
+          company: companyId,
+          branch: branchId,
+          $or: ledgerMatchConditions,
         },
       },
-    },
-    {
-      $group: {
-        _id: "$account",
-        totalSignedAmount: { $sum: "$signedAmount" },
-        transactionCount: { $sum: 1 },
+      {
+        $addFields: {
+          signedAmount: {
+            $multiply: [
+              "$amount",
+              { $cond: [{ $eq: ["$ledgerSide", "debit"] }, 1, -1] },
+            ],
+          },
+        },
       },
-    },
-  ]);
-  console.timeEnd("Step 4 - Ledger movements query");
+      {
+        $group: {
+          _id: "$account",
+          totalSignedAmount: { $sum: "$signedAmount" },
+          transactionCount: { $sum: 1 },
+        },
+      },
+    ]);
+  }
+  console.timeEnd("Step 3 - Ledger movements query");
   console.log("Ledger movements found:", ledgerMovements.length);
 
-  // STEP 5: Get adjustments
-  console.time("Step 5 - Adjustment movements query");
+  // STEP 6: Get adjustments
+  console.time("Step 4 - Adjustment movements query");
   const adjustmentMatchConditions = accountIdObjs.map((id) => ({
     affectedAccount: id,
     originalTransactionDate: {
-      $gte: BASE_START_DATE,
       $lt: selectedDate,
     },
   }));
@@ -199,11 +242,11 @@ export const getBatchOpeningBalances = async (
       },
     },
   ]);
-  console.timeEnd("Step 5 - Adjustment movements query");
+  console.timeEnd("Step 4 - Adjustment movements query");
   console.log("Adjustment movements found:", adjustmentMovements.length);
 
-  // STEP 6: Combine all data
-  console.log("Step 6: Combining all data");
+  // STEP 7: Combine all data
+  console.log("Step 5: Combining all data");
   const finalBalances = {};
 
   accountIdObjs.forEach((id) => {
@@ -229,6 +272,7 @@ export const getBatchOpeningBalances = async (
   return finalBalances;
 };
 
+
 /**
  * Check if dirty period exists
  */
@@ -237,7 +281,7 @@ export const checkIfDirtyPeriodExists = async (
   branch,
   accountIds,
   startDate,
-  endDate
+  endDate,
 ) => {
   console.log("Checking dirty period status");
 
@@ -249,7 +293,7 @@ export const checkIfDirtyPeriodExists = async (
   const prevMonthDate = new Date(
     reportStartDate.getFullYear(),
     reportStartDate.getMonth() - 1,
-    1
+    1,
   );
   const prevYear = prevMonthDate.getFullYear();
   const prevMonthNum = prevMonthDate.getMonth() + 1;
@@ -308,7 +352,7 @@ export const getBatchAdjustedLedgers = async (
   endDate,
   openingBalances,
   transactionType = null,
-  summaryOnly = false
+  summaryOnly = false,
 ) => {
   const accountIdObjs = accountIds.map((id) => toObjectId(id));
 
@@ -354,19 +398,15 @@ export const getBatchAdjustedLedgers = async (
             $addFields: {
               // Properly check if oldAccount exists
               hasOldAccount: {
-                $cond: [
-                  { $ifNull: ["$oldAccount", false] },
-                  true,
-                  false
-                ]
+                $cond: [{ $ifNull: ["$oldAccount", false] }, true, false],
               },
               isAccountChange: {
                 $and: [
                   { $ifNull: ["$oldAccount", false] },
-                  { $ne: ["$oldAccount", "$affectedAccount"] }
-                ]
-              }
-            }
+                  { $ne: ["$oldAccount", "$affectedAccount"] },
+                ],
+              },
+            },
           },
           {
             $addFields: {
@@ -377,8 +417,8 @@ export const getBatchAdjustedLedgers = async (
                     $and: [
                       "$hasOldAccount",
                       { $eq: ["$oldAccount", "$$currentAccount"] },
-                      "$isAccountChange"
-                    ]
+                      "$isAccountChange",
+                    ],
                   },
                   "ZERO_OUT_OLD",
                   {
@@ -389,13 +429,13 @@ export const getBatchAdjustedLedgers = async (
                         $cond: [
                           "$isAccountChange",
                           "ADD_NEW_AMOUNT",
-                          "ADD_DELTA"
-                        ]
+                          "ADD_DELTA",
+                        ],
                       },
-                      "NONE"
-                    ]
-                  }
-                ]
+                      "NONE",
+                    ],
+                  },
+                ],
               },
               adjustmentValue: {
                 $cond: [
@@ -404,8 +444,8 @@ export const getBatchAdjustedLedgers = async (
                     $and: [
                       "$hasOldAccount",
                       { $eq: ["$oldAccount", "$$currentAccount"] },
-                      "$isAccountChange"
-                    ]
+                      "$isAccountChange",
+                    ],
                   },
                   { $multiply: ["$oldAmount", -1] },
                   {
@@ -416,15 +456,15 @@ export const getBatchAdjustedLedgers = async (
                         $cond: [
                           "$isAccountChange",
                           "$newAmount",
-                          "$amountDelta"
-                        ]
+                          "$amountDelta",
+                        ],
                       },
-                      0
-                    ]
-                  }
-                ]
-              }
-            }
+                      0,
+                    ],
+                  },
+                ],
+              },
+            },
           },
           {
             $project: {
@@ -436,7 +476,7 @@ export const getBatchAdjustedLedgers = async (
               adjustmentType: 1,
               adjustmentValue: 1,
               hasOldAccount: 1,
-              isAccountChange: 1
+              isAccountChange: 1,
             },
           },
         ],
@@ -446,9 +486,9 @@ export const getBatchAdjustedLedgers = async (
     {
       $addFields: {
         effectiveAdjustment: {
-          $sum: "$adjustments.adjustmentValue"
-        }
-      }
+          $sum: "$adjustments.adjustmentValue",
+        },
+      },
     },
     {
       $addFields: {
@@ -464,8 +504,8 @@ export const getBatchAdjustedLedgers = async (
     // Filter out zero effective amounts
     {
       $match: {
-        effectiveAmount: { $ne: 0 }
-      }
+        effectiveAmount: { $ne: 0 },
+      },
     },
     { $sort: { account: 1, transactionDate: 1, createdAt: 1 } },
     {
@@ -621,11 +661,6 @@ export const getBatchAdjustedLedgers = async (
   return ledgerMap;
 };
 
-
-
-
-
-
 // =============================================================================
 // REPORT PATHS
 // =============================================================================
@@ -643,7 +678,7 @@ export const getSimpleLedgerReport = async (
   limit = 50,
   searchTerm = null,
   account = null,
-  summaryOnly = false
+  summaryOnly = false,
 ) => {
   console.log("getSimpleLedgerReport FAST PATH START");
   const reportStartTime = Date.now();
@@ -723,7 +758,7 @@ export const getSimpleLedgerReport = async (
   const prevMonthDate = new Date(
     startDate.getFullYear(),
     startDate.getMonth() - 1,
-    1
+    1,
   );
   const prevYear = prevMonthDate.getFullYear();
   const prevMonthNum = prevMonthDate.getMonth() + 1;
@@ -842,6 +877,14 @@ export const getSimpleLedgerReport = async (
     const closingQty =
       openingQty + (item.totalDebit || 0) - (item.totalCredit || 0);
 
+    // Add effectiveAmount to each transaction
+    const transactionsWithEffectiveAmount = summaryOnly
+      ? undefined
+      : item.transactions.map((txn) => ({
+          ...txn,
+          effectiveAmount: txn.amount,
+        }));
+
     ledgerMap[accountKey] = {
       openingBalance: openingQty,
       summary: {
@@ -858,7 +901,7 @@ export const getSimpleLedgerReport = async (
           receipt: item.totalReceipt || 0,
         },
       },
-      ...(summaryOnly ? {} : { transactions: item.transactions }),
+      ...(summaryOnly ? {} : { transactions: transactionsWithEffectiveAmount }),
     };
   });
 
@@ -940,7 +983,7 @@ export const getHybridLedgerReport = async (
   limit = 50,
   searchTerm = null,
   account = null,
-  summaryOnly = false
+  summaryOnly = false,
 ) => {
   console.log("getHybridLedgerReport HYBRID PATH START");
   const reportStartTime = Date.now();
@@ -1021,7 +1064,7 @@ export const getHybridLedgerReport = async (
     company,
     branch,
     accountIds,
-    startDate
+    startDate,
   );
 
   const ledgers = await AccountLedger.aggregate([
@@ -1213,7 +1256,7 @@ export const refoldLedgersWithAdjustments = async (
   limit = 50,
   searchTerm = null,
   account = null,
-  summaryOnly = false
+  summaryOnly = false,
 ) => {
   console.log("refoldLedgersWithAdjustments FULL REFOLD START");
   const reportStartTime = Date.now();
@@ -1294,7 +1337,7 @@ export const refoldLedgersWithAdjustments = async (
     company,
     branch,
     accountIds,
-    startDate
+    startDate,
   );
 
   const ledgerMap = await getBatchAdjustedLedgers(
@@ -1305,7 +1348,7 @@ export const refoldLedgersWithAdjustments = async (
     endDate,
     openingBalances,
     transactionType,
-    summaryOnly
+    summaryOnly,
   );
 
   const ledgersPerAccount = accountsPage.map((row) => {

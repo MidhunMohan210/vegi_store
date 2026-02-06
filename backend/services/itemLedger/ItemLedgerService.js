@@ -84,6 +84,10 @@ const getStockMovementConditions = (transactionType) => {
  * @param {Date} selectedDate - Report start date (opening calculated for this date)
  * @returns {Object} Map of { itemId: openingQuantity }
  */
+/**
+ * Calculate opening balances for multiple items at once (BATCHED)
+ * Now checks backward for clean periods dynamically instead of hard-coded base date
+ */
 export const getBatchOpeningBalances = async (
   company,
   branch,
@@ -103,16 +107,9 @@ export const getBatchOpeningBalances = async (
   const branchId = toObjectId(branch);
   const itemIdObjs = itemIds.map((id) => toObjectId(id));
 
-  // Base start date for the system (no data before this)
-  const BASE_START_DATE = new Date("2025-04-01T00:00:00.000Z");
-
-  // Handle invalid dates or dates before system start
-  if (
-    !selectedDate ||
-    isNaN(selectedDate.getTime()) ||
-    selectedDate < BASE_START_DATE
-  ) {
-    console.log("Early return: Invalid or pre-base date detected");
+  // Handle invalid dates
+  if (!selectedDate || isNaN(selectedDate.getTime())) {
+    console.log("Early return: Invalid date detected");
     return itemIds.reduce((acc, id) => ({ ...acc, [id.toString()]: 0 }), {});
   }
 
@@ -128,7 +125,7 @@ export const getBatchOpeningBalances = async (
   console.log("Calculated previous month:", { prevYear, prevMonthNum });
 
   /* -----------------------------------------------------------------------
-     STEP 1: Get last CLEAN monthly balance for ALL items
+     STEP 1: Get last CLEAN monthly balance for ALL items (look backward infinitely)
      This finds the most recent verified snapshot before our report date
      ----------------------------------------------------------------------- */
   console.time("Step 1: Monthly balances query");
@@ -161,23 +158,64 @@ export const getBatchOpeningBalances = async (
   console.log("Monthly balances found:", monthlyBalances.length);
 
   /* -----------------------------------------------------------------------
-     STEP 2: Fallback to item master for items WITHOUT monthly balances
-     New items or items created before monthly balance system
+     STEP 2: For items without clean monthly balance, check if transactions exist
      ----------------------------------------------------------------------- */
   const itemsWithBalances = monthlyBalances.map((m) => m._id.toString());
-  const itemsNeedingMaster = itemIdObjs.filter(
+  const itemsNeedingFallback = itemIdObjs.filter(
     (id) => !itemsWithBalances.includes(id.toString())
   );
 
-  console.log("Items needing master lookup:", itemsNeedingMaster.length);
+  console.log("Items needing fallback logic:", itemsNeedingFallback.length);
 
+  const baseBalances = {};
+  const dirtyPeriodStarts = {};
+
+  // Add monthly balances to base
+  monthlyBalances.forEach((mb) => {
+    const itemKey = mb._id.toString();
+    baseBalances[itemKey] = mb.closingStock || 0;
+    dirtyPeriodStarts[itemKey] = new Date(mb.year, mb.month, 1);
+    console.log(
+      `Item ${itemKey}: Monthly balance ${mb.closingStock} from ${mb.year}-${mb.month}`
+    );
+  });
+
+  // STEP 3: For remaining items, check if they have ANY transactions
+  let itemsWithTransactions = [];
+  if (itemsNeedingFallback.length > 0) {
+    console.time("Step 2a: Check transaction existence");
+    itemsWithTransactions = await ItemLedger.aggregate([
+      {
+        $match: {
+          company: companyId,
+          branch: branchId,
+          item: { $in: itemsNeedingFallback },
+          transactionDate: { $lt: selectedDate },
+        },
+      },
+      {
+        $group: {
+          _id: "$item",
+          earliestTransaction: { $min: "$transactionDate" },
+          hasTransactions: { $sum: 1 },
+        },
+      },
+    ]);
+    console.timeEnd("Step 2a: Check transaction existence");
+    console.log("Items with transactions:", itemsWithTransactions.length);
+  }
+
+  const itemsWithTxnIds = itemsWithTransactions.map((i) => i._id.toString());
+
+  // STEP 4: Fetch ItemMaster for ALL items needing fallback
+  // (Not just those with transactions - opening stock is needed regardless)
   let masterBalances = [];
-  if (itemsNeedingMaster.length > 0) {
-    console.time("Step 2: Item master query");
+  if (itemsNeedingFallback.length > 0) {
+    console.time("Step 2b: Item master query");
     masterBalances = await ItemMasterModel.aggregate([
       {
         $match: {
-          _id: { $in: itemsNeedingMaster },
+          _id: { $in: itemsNeedingFallback },
           company: companyId,
         },
       },
@@ -194,48 +232,34 @@ export const getBatchOpeningBalances = async (
         },
       },
     ]);
-    console.timeEnd("Step 2: Item master query");
+    console.timeEnd("Step 2b: Item master query");
     console.log("Master balances found:", masterBalances.length);
   }
 
-  /* -----------------------------------------------------------------------
-     STEP 3: Build base balances map and track dirty period start dates
-     Each item has its own dirty period based on last snapshot
-     ----------------------------------------------------------------------- */
-  console.log("Step 3: Building base balances map");
-  const baseBalances = {};
-  const dirtyPeriodStarts = {};
-
-  // Items with monthly balance: use closing stock as base
-  monthlyBalances.forEach((mb) => {
-    const itemKey = mb._id.toString();
-    baseBalances[itemKey] = mb.closingStock || 0;
-    // Dirty period starts from the month AFTER the snapshot
-    dirtyPeriodStarts[itemKey] = new Date(mb.year, mb.month, 1);
-    console.log(
-      `Item ${itemKey}: Monthly balance ${mb.closingStock} from ${mb.year}-${mb.month}`
-    );
-  });
-
-  // Items from master: use opening stock as base
+  // Add master balances
   masterBalances.forEach((master) => {
     const itemKey = master._id.toString();
     baseBalances[itemKey] = master.openingStock || 0;
-    // Dirty period starts from system base date (no snapshots exist)
-    dirtyPeriodStarts[itemKey] = BASE_START_DATE;
+    
+    // Find earliest transaction date for this item (if exists)
+    const txnInfo = itemsWithTransactions.find(
+      (i) => i._id.toString() === itemKey
+    );
+    
+    // If item has transactions, dirty period starts from earliest transaction
+    // If no transactions, dirty period starts from selectedDate (so range is empty)
+    dirtyPeriodStarts[itemKey] = txnInfo?.earliestTransaction || selectedDate;
     console.log(
-      `Item ${itemKey}: Master opening ${
-        master.openingStock
-      }, dirty start ${BASE_START_DATE.toISOString()}`
+      `Item ${itemKey}: Master opening ${master.openingStock}, dirty start ${dirtyPeriodStarts[itemKey]?.toISOString()}`
     );
   });
 
-  // Initialize items with no data found anywhere
-  itemIdObjs.forEach((id) => {
+  // For items that don't exist in ItemMaster at all, default to 0
+  itemsNeedingFallback.forEach((id) => {
     const itemKey = id.toString();
-    if (!baseBalances[itemKey]) {
+    if (baseBalances[itemKey] === undefined) {
       baseBalances[itemKey] = 0;
-      dirtyPeriodStarts[itemKey] = BASE_START_DATE;
+      dirtyPeriodStarts[itemKey] = selectedDate; // No dirty period
       console.log(`Item ${itemKey}: No data found, defaulting to 0`);
     }
   });
@@ -249,53 +273,63 @@ export const getBatchOpeningBalances = async (
   console.log("Dirty period end:", dirtyPeriodEnd.toISOString());
 
   /* -----------------------------------------------------------------------
-     STEP 4: Get ledger movements in dirty period (PER ITEM date ranges)
+     STEP 5: Get ledger movements for dirty periods
      Each item has different dirty period based on last snapshot
      ----------------------------------------------------------------------- */
-  console.time("Step 4: Ledger movements query");
+  console.time("Step 3: Ledger movements query");
 
   // Build $or conditions with per-item date ranges
-  const ledgerMatchConditions = itemIdObjs.map((id) => {
-    const itemKey = id.toString();
-    const startDate = dirtyPeriodStarts[itemKey] || BASE_START_DATE;
+  const ledgerMatchConditions = itemIdObjs
+    .map((id) => {
+      const itemKey = id.toString();
+      const startDate = dirtyPeriodStarts[itemKey];
 
-    return {
-      item: id,
-      transactionDate: {
-        $gte: startDate, // Dirty period start (different per item)
-        $lt: dirtyPeriodEnd, // Report start date (same for all)
-      },
-    };
-  });
+      // Skip if no dirty period (e.g., no transactions exist)
+      if (!startDate || startDate >= dirtyPeriodEnd) {
+        return null;
+      }
 
-  const ledgerMovements = await ItemLedger.aggregate([
-    {
-      $match: {
-        company: companyId,
-        branch: branchId,
-        $or: ledgerMatchConditions, // Use per-item date ranges
-      },
-    },
-    {
-      $addFields: {
-        // Convert to signed quantity: in = +, out = -
-        signedQuantity: {
-          $multiply: [
-            "$quantity",
-            { $cond: [{ $eq: ["$movementType", "out"] }, -1, 1] },
-          ],
+      return {
+        item: id,
+        transactionDate: {
+          $gte: startDate, // Dirty period start (different per item)
+          $lt: dirtyPeriodEnd, // Report start date (same for all)
+        },
+      };
+    })
+    .filter(Boolean); // Remove null entries
+
+  let ledgerMovements = [];
+  if (ledgerMatchConditions.length > 0) {
+    ledgerMovements = await ItemLedger.aggregate([
+      {
+        $match: {
+          company: companyId,
+          branch: branchId,
+          $or: ledgerMatchConditions, // Use per-item date ranges
         },
       },
-    },
-    {
-      $group: {
-        _id: "$item",
-        totalSignedQuantity: { $sum: "$signedQuantity" },
-        transactionCount: { $sum: 1 },
+      {
+        $addFields: {
+          // Convert to signed quantity: in = +, out = -
+          signedQuantity: {
+            $multiply: [
+              "$quantity",
+              { $cond: [{ $eq: ["$movementType", "out"] }, -1, 1] },
+            ],
+          },
+        },
       },
-    },
-  ]);
-  console.timeEnd("Step 4: Ledger movements query");
+      {
+        $group: {
+          _id: "$item",
+          totalSignedQuantity: { $sum: "$signedQuantity" },
+          transactionCount: { $sum: 1 },
+        },
+      },
+    ]);
+  }
+  console.timeEnd("Step 3: Ledger movements query");
   console.log("Ledger movements found:", ledgerMovements.length);
   ledgerMovements.forEach((lm) => {
     console.log(
@@ -304,23 +338,17 @@ export const getBatchOpeningBalances = async (
   });
 
   /* -----------------------------------------------------------------------
-     STEP 5: Get adjustments in dirty period (PER ITEM date ranges)
+     STEP 6: Get adjustments (all adjustments before selectedDate)
      Adjustments modify original transactions, need to apply deltas
      ----------------------------------------------------------------------- */
-  console.time("Step 5: Adjustment movements query");
+  console.time("Step 4: Adjustment movements query");
 
-  const adjustmentMatchConditions = itemIdObjs.map((id) => {
-    const itemKey = id.toString();
-    const startDate = dirtyPeriodStarts[itemKey] || BASE_START_DATE;
-
-    return {
-      "itemAdjustments.item": id,
-      originalTransactionDate: {
-        $gte: startDate,
-        $lt: dirtyPeriodEnd,
-      },
-    };
-  });
+  const adjustmentMatchConditions = itemIdObjs.map((id) => ({
+    "itemAdjustments.item": id,
+    originalTransactionDate: {
+      $lt: selectedDate,
+    },
+  }));
 
   const adjustmentMovements = await AdjustmentEntry.aggregate([
     {
@@ -379,17 +407,17 @@ export const getBatchOpeningBalances = async (
       },
     },
   ]);
-  console.timeEnd("Step 5: Adjustment movements query");
+  console.timeEnd("Step 4: Adjustment movements query");
   console.log("Adjustment movements found:", adjustmentMovements.length);
   adjustmentMovements.forEach((am) => {
     console.log(`  Item ${am._id}: adjustment delta ${am.totalSignedQtyDelta}`);
   });
 
   /* -----------------------------------------------------------------------
-     STEP 6: Combine all data to calculate final opening balances
+     STEP 7: Combine all data to calculate final opening balances
      Formula: opening = base + ledgerMovements + adjustments
      ----------------------------------------------------------------------- */
-  console.log("Step 6: Combining all data");
+  console.log("Step 5: Combining all data");
   const finalBalances = {};
 
   itemIdObjs.forEach((id) => {
@@ -429,6 +457,7 @@ export const getBatchOpeningBalances = async (
 
   return finalBalances;
 };
+
 
 /**
  * Get last purchase rate for multiple items at once (BATCHED)

@@ -66,8 +66,8 @@ const TransactionHeader = ({
               calendarClassName="text-xs"
               popperPlacement="bottom-end"
               portalId="root"
-              minDate={minDate}
-              maxDate={maxDate}
+              // minDate={minDate}
+              // maxDate={maxDate}
             />
           </div>
         </div>
