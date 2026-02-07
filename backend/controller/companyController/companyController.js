@@ -40,7 +40,6 @@ export const createCompany = async (req, res) => {
       financialYear,
     } = req.body;
 
-    // 1) Validate required fields
     if (!companyName || !email) {
       return res.status(400).json({
         success: false,
@@ -48,7 +47,6 @@ export const createCompany = async (req, res) => {
       });
     }
 
-    // 2) Validate financialYear format if provided
     if (financialYear?.format) {
       const validFormats = [
         "april-march",
@@ -70,7 +68,6 @@ export const createCompany = async (req, res) => {
       }
     }
 
-    // 3) Check if company already exists
     const existingCompany = await CompanyModel.findOne({ companyName });
     if (existingCompany) {
       return res.status(409).json({
@@ -79,7 +76,14 @@ export const createCompany = async (req, res) => {
       });
     }
 
-    // 4) Create company (format only matters here)
+    // Map frontend startingYear into schema (if you have startYear in schema, map to that instead)
+    const fyPayload = financialYear
+      ? {
+          ...financialYear,
+          startingYear: financialYear.startingYear,
+        }
+      : { format: "april-march" };
+
     const newCompany = new CompanyModel({
       companyName,
       companyType,
@@ -97,21 +101,28 @@ export const createCompany = async (req, res) => {
       industry,
       numEmployees,
       status: status || "Active",
-      financialYear: financialYear || { format: "april-march" },
+      financialYear: fyPayload,
     });
 
     const savedCompany = await newCompany.save();
 
-    // 5) Create default FY settings for this company
     const companyId = savedCompany._id.toString();
     const fyFormat = savedCompany.financialYear?.format || "april-march";
 
-    // Default year: based on current date
-    const now = new Date();
-    const year = now.getFullYear();
-    const nextYear = year + 1;
-    const defaultFY = `${year}-${nextYear}`; // "2026-2027"
+    // 🔹 Use the selected startingYear as the FY start year
+    const startYearFromBody = financialYear?.startingYear;
+    const startYear =
+      startYearFromBody && Number.isInteger(Number(startYearFromBody))
+        ? Number(startYearFromBody)
+        : new Date().getFullYear(); // fallback if not provided / invalid
 
+    // For Jan–Dec, FY is within same year; for other formats, it spans to next year
+    const endYear =
+      fyFormat === "january-december" ? startYear : startYear + 1;
+
+    const defaultFY = `${startYear}-${endYear}`; // e.g. "2025-2026"
+
+    // computeFYDates already respects Jan–Dec as same year via fyFormat logic
     const { startDate, endDate } = computeFYDates(defaultFY, fyFormat);
 
     const companySettings = await CompanySettingsModel.create({
@@ -124,7 +135,6 @@ export const createCompany = async (req, res) => {
       },
     });
 
-    // 6) Response
     return res.status(201).json({
       success: true,
       message: "Company created successfully",
@@ -138,6 +148,8 @@ export const createCompany = async (req, res) => {
     });
   }
 };
+
+
 
 // Get company by ID
 export const getCompanyById = async (req, res) => {
@@ -193,7 +205,7 @@ const hasTransactions = async (companyId, transactionId = null) => {
   return false;
 };
 
-// ✅ Update company (with FY format lock + settings sync)
+// ✅ Update company (with FY format + start year lock)
 export const updateCompany = async (req, res) => {
   try {
     const { id } = req.params;
@@ -208,6 +220,7 @@ export const updateCompany = async (req, res) => {
     }
 
     let formatChanged = false;
+    let yearChanged = false; // NEW
 
     // 🔒 Check if trying to update Financial Year FORMAT (months)
     if (
@@ -241,11 +254,29 @@ export const updateCompany = async (req, res) => {
         });
       }
 
-      // No transactions → format can be changed
       formatChanged = true;
     }
 
-    // 🔧 Preserve existing FY data when updating other fields
+    // 🔒 NEW: block startingYear change when formatLocked
+    if (
+      updateData.financialYear?.startingYear !== undefined &&
+      updateData.financialYear.startingYear !==
+        company.financialYear?.startingYear
+    ) {
+      if (company.financialYear?.formatLocked) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Financial year starting year is locked and cannot be changed after transactions exist.",
+          formatLockedAt: company.financialYear.formatLockedAt,
+          formatLockedReason: company.financialYear.formatLockedReason,
+        });
+      }
+
+      yearChanged = true;
+    }
+
+    // 🔧 Preserve existing FY data when updating other fields + map startingYear
     if (updateData.financialYear) {
       updateData.financialYear = {
         ...company.financialYear.toObject(),
@@ -253,6 +284,7 @@ export const updateCompany = async (req, res) => {
       };
     }
 
+    // name uniqueness (unchanged)
     if (
       updateData.companyName &&
       updateData.companyName !== company.companyName
@@ -273,40 +305,32 @@ export const updateCompany = async (req, res) => {
     Object.assign(company, updateData);
     const updatedCompany = await company.save();
 
-    // 🔁 If FY format changed, ensure settings exist and recalc dates
-    if (formatChanged) {
+    // 🔁 If FY format changed OR starting year changed, ensure settings exist and recalc dates
+    if (formatChanged || yearChanged) {
       const companyId = updatedCompany._id.toString();
 
       let settings = await CompanySettingsModel.findOne({ company: companyId });
 
-      // Determine currentFY to use for settings:
-      // 1) existing settings.currentFY
-      // 2) company.financialYear.currentFY (if you still fill it)
-      // 3) fallback from current date
-      let currentFY;
-      if (settings?.financialYear?.currentFY) {
-        currentFY = settings.financialYear.currentFY;
-      } else if (updatedCompany.financialYear?.currentFY) {
-        // if format is "2025-26", normalise to "2025-2026"
-        const parts = updatedCompany.financialYear.currentFY.split("-");
-        if (parts.length === 2 && parts[1].length === 2) {
-          const start = parseInt(parts[0], 10);
-          const end = start + 1;
-          currentFY = `${start}-${end}`;
-        } else {
-          currentFY = updatedCompany.financialYear.currentFY;
-        }
-      } else {
-        const now = new Date();
-        const y = now.getFullYear();
-        currentFY = `${y}-${y + 1}`;
-      }
+      // Determine startYear from company.financialYear.startingYear (or fallback)
+      const fy = updatedCompany.financialYear || {};
+      const startYear =
+        fy.startingYear && Number.isInteger(Number(fy.startingYear))
+          ? Number(fy.startingYear)
+          : (() => {
+              const now = new Date();
+              return now.getFullYear();
+            })();
 
-      const fyFormat = updatedCompany.financialYear.format || "april-march";
+      const fyFormat = fy.format || "april-march";
+
+      const endYear =
+        fyFormat === "january-december" ? startYear : startYear + 1;
+
+      const currentFY = `${startYear}-${endYear}`;
+
       const { startDate, endDate } = computeFYDates(currentFY, fyFormat);
 
       if (!settings) {
-        // No settings yet → create
         settings = new CompanySettingsModel({
           company: companyId,
           financialYear: {
@@ -317,7 +341,6 @@ export const updateCompany = async (req, res) => {
           },
         });
       } else {
-        // Update existing
         settings.financialYear.currentFY = currentFY;
         settings.financialYear.startDate = startDate;
         settings.financialYear.endDate = endDate;
@@ -340,6 +363,8 @@ export const updateCompany = async (req, res) => {
     });
   }
 };
+
+
 
 // 🔒 Lock Financial Year FORMAT (call this when first transaction is created)
 export const lockFinancialYearFormat = async (companyId, session) => {
