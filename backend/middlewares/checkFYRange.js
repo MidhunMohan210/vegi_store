@@ -5,7 +5,16 @@ import CompanySettingsModel from "../model/CompanySettings.model.js";
 
 export const checkFYRange = (getDateField = "date") => {
   return async (req, res, next) => {
+
+
     try {
+
+      const environment = process.env.NODE_ENV || "development";
+
+      
+      if (environment === "development") {
+        return next();
+      }
       const companyId = req.body.company || req.params.companyId;
       const txnDate = req.body[getDateField];
 

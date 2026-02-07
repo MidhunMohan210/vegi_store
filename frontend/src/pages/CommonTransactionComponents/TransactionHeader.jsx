@@ -17,6 +17,12 @@ const TransactionHeader = ({
 
   const dateValue = date ? new Date(date) : new Date();
 
+  const isDev =
+    import.meta.env.VITE_ENV !== "production" ||
+    import.meta.env.VITE_ENV !== "testing";
+
+  console.log(isDev);
+
   const handleDateChange = (selectedDate) => {
     if (selectedDate) {
       const year = selectedDate.getFullYear();
@@ -66,8 +72,8 @@ const TransactionHeader = ({
               calendarClassName="text-xs"
               popperPlacement="bottom-end"
               portalId="root"
-              // minDate={minDate}
-              // maxDate={maxDate}
+              minDate={isDev ? null : minDate}
+              maxDate={isDev ? null : maxDate}
             />
           </div>
         </div>

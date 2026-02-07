@@ -57,7 +57,7 @@ const FinancialYearSettings = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="h-[calc(100vh-110px)] bg-slate-50">
       {/* Header */}
       <div className="px-6 pt-4 pb-3 border-b border-slate-200 bg-slate-50/80 flex items-center gap-2">
         <button
@@ -87,7 +87,7 @@ const FinancialYearSettings = () => {
       </div>
 
       {/* Content */}
-      <div className="px-6 py-6 flex justify-center">
+      <div className="px-6 py-6 flex justify-center overflow-y-auto">
         <div className="w-full max-w-3xl">
           <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm">
             <div className="mb-4">
