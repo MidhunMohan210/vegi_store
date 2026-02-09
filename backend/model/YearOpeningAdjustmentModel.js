@@ -78,7 +78,7 @@ const yearOpeningAdjustmentSchema = new mongoose.Schema(
 
 // Compound Indexes
 yearOpeningAdjustmentSchema.index(
-  { entityId: 1, entityType: 1, financialYear: 1 },
+  { entityId: 1, entityType: 1, financialYear: 1 ,isCancelled: 1},
   { unique: true, name: 'unique_entity_year' }
 );
 

@@ -107,9 +107,12 @@ export const cancelAdjustment = async (req, res) => {
     const { adjustmentId } = req.params;
     // Implementation pending
 
+    const result = await OpeningBalanceService.cancelAdjustment(adjustmentId);
+
     return res.status(200).json({
       success: true,
       message: "Adjustment cancelled successfully",
+      data: result,
     });
   } catch (error) {
     console.error("Error cancelling adjustment:", error);

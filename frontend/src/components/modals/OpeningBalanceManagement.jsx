@@ -26,7 +26,10 @@ import {
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { openingBalanceQueries } from "@/hooks/queries/openingBalance.queries";
-import { useSaveOpeningAdjustment } from "@/hooks/mutations/openingBalance.mutation";
+import {
+  useSaveOpeningAdjustment,
+  useDeleteOpeningAdjustment,
+} from "@/hooks/mutations/openingBalance.mutation";
 import { useSelector } from "react-redux";
 
 const OpeningBalanceManagement = ({
@@ -38,6 +41,9 @@ const OpeningBalanceManagement = ({
 }) => {
   const [page, setPage] = useState(1);
   const [editingYear, setEditingYear] = useState(null);
+  const [editingYearHasAdjustment, setEditingYearHasAdjustment] =
+    useState(false);
+  const [editingAdjustmentId, setEditingAdjustmentId] = useState(null);
   const [adjustmentForm, setAdjustmentForm] = useState({
     desiredOpening: "",
     reason: "",
@@ -49,10 +55,7 @@ const OpeningBalanceManagement = ({
   const branchId = useSelector(
     (state) => state.companyBranch?.selectedBranch?._id,
   );
-  
-  console.log(entityId);
-  
-``
+
   const {
     data: responseData,
     isLoading,
@@ -74,21 +77,35 @@ const OpeningBalanceManagement = ({
 
   const { mutate: saveAdjustment, isPending: isSaving } =
     useSaveOpeningAdjustment();
+  const { mutate: deleteAdjustment, isPending: isDeleting } =
+    useDeleteOpeningAdjustment();
 
   const handleEditAdjustment = (year) => {
     setEditingYear(year);
+
+    console.log(fullData);
+    
     const yearInfo = fullData.find((y) => y.financialYear === year);
     if (!yearInfo) return;
 
     const currentValue =
       entityType === "item"
-        ? (yearInfo.effectiveQuantity ?? yearInfo.openingQuantity)
-        : (yearInfo.effectiveOpening ?? yearInfo.openingBalance);
+        ? yearInfo.effectiveQuantity ?? yearInfo.openingQuantity
+        : yearInfo.effectiveOpening ?? yearInfo.openingBalance;
 
     setAdjustmentForm({
       desiredOpening: currentValue ?? "",
       reason: yearInfo.adjustment ? "Update adjustment" : "",
     });
+    setEditingYearHasAdjustment(!!yearInfo.adjustment);
+    setEditingAdjustmentId(yearInfo.adjustmentId || null);
+  };
+
+  const resetEditState = () => {
+    setEditingYear(null);
+    setEditingAdjustmentId(null);
+    setEditingYearHasAdjustment(false);
+    setAdjustmentForm({ desiredOpening: "", reason: "" });
   };
 
   const handleSaveAdjustment = () => {
@@ -124,8 +141,25 @@ const OpeningBalanceManagement = ({
       },
       {
         onSuccess: () => {
-          setEditingYear(null);
-          setAdjustmentForm({ desiredOpening: "", reason: "" });
+          resetEditState();
+        },
+      },
+    );
+  };
+
+  const handleDeleteAdjustment = () => {
+
+    console.log("editingAdjustmentId", editingAdjustmentId);
+    
+    if (!editingAdjustmentId) return;
+
+
+
+    deleteAdjustment(
+      { adjustmentId: editingAdjustmentId },
+      {
+        onSuccess: () => {
+          resetEditState();
         },
       },
     );
@@ -137,9 +171,8 @@ const OpeningBalanceManagement = ({
       currency: "INR",
       maximumFractionDigits: 0,
     }).format(amount || 0);
-    
-    const formatNumber = (num) => new Intl.NumberFormat("en-IN").format(num || 0);
 
+  const formatNumber = (num) => new Intl.NumberFormat("en-IN").format(num || 0);
 
   return (
     <>
@@ -505,7 +538,7 @@ const OpeningBalanceManagement = ({
       {/* Edit Adjustment Modal */}
       <Dialog
         open={editingYear !== null}
-        onOpenChange={() => setEditingYear(null)}
+        onOpenChange={() => resetEditState()}
       >
         <DialogContent className="max-w-md bg-white dark:bg-zinc-950 dark:border-zinc-800">
           <DialogHeader>
@@ -564,18 +597,33 @@ const OpeningBalanceManagement = ({
             </div>
 
             <div className="flex gap-2">
+              {editingYearHasAdjustment && (
+                <Button
+                  variant="outline"
+                  onClick={handleDeleteAdjustment}
+                  className="flex-1 bg-red-600 text-white hover:bg-red-700 hover:text-white"
+                  disabled={isSaving || isDeleting}
+                >
+                  {isDeleting ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  ) : (
+                    "Delete Adjustment"
+                  )}
+                </Button>
+              )}
+
               <Button
                 variant="outline"
-                onClick={() => setEditingYear(null)}
+                onClick={resetEditState}
                 className="flex-1 dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                disabled={isSaving}
+                disabled={isSaving || isDeleting}
               >
                 Cancel
               </Button>
               <Button
                 onClick={handleSaveAdjustment}
                 className="flex-1 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-                disabled={isSaving}
+                disabled={isSaving || isDeleting}
               >
                 {isSaving ? (
                   <Loader2 className="w-4 h-4 animate-spin mr-2" />

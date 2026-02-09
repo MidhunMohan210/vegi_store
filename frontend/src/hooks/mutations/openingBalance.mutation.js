@@ -13,14 +13,47 @@ export const useSaveOpeningAdjustment = () => {
 
       // Invalidate the list query to refresh the table
       queryClient.invalidateQueries({
-        queryKey: ["openingBalance", "list", variables.entityType, variables.entityId]
+        queryKey: [
+          "openingBalance",
+          "list",
+          variables.entityType,
+          variables.entityId,
+        ],
       });
-      
+
       // Optionally invalidate account/item details if needed
       // queryClient.invalidateQueries(["accountMaster", "detail", variables.entityId]);
     },
     onError: (error) => {
       toast.error(error.message || "Failed to save adjustment");
-    }
+    },
+  });
+};
+
+export const useDeleteOpeningAdjustment = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload) => openingBalanceService.cancelAdjustment(payload.adjustmentId),
+    onSuccess: (res, variables) => {
+
+      console.log(variables);
+      console.log(res);
+      const resData = res.data || {};
+      
+      toast.success(res.message || "Adjustment removed");
+
+      queryClient.invalidateQueries({
+        queryKey: [
+          "openingBalance",
+          "list",
+          resData.entityType,
+          resData.entityId,
+        ],
+      });
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to remove adjustment");
+    },
   });
 };

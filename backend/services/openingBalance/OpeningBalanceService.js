@@ -276,6 +276,8 @@ const OpeningBalanceService = {
           node.adjustment = adjustment.adjustmentAmount;
           node.effectiveOpening =
             node.openingBalance + adjustment.adjustmentAmount;
+
+          node.adjustmentId = adjustment._id; // for potential future cancellation
         } else {
           node.effectiveOpening = node.openingBalance;
         }
@@ -364,6 +366,7 @@ const OpeningBalanceService = {
         adjustment.adjustmentAmount = adjustmentAmount;
         adjustment.reason = reason;
         adjustment.updatedBy = userId;
+        // adjustment.isCancelled = false;
         await adjustment.save({ session });
       } else {
         adjustment = new YearOpeningAdjustment({
@@ -414,6 +417,36 @@ const OpeningBalanceService = {
     // This part will contain the logic to update monthly balances
     // Will implement this next if needed
     console.log("Recalculating from", startMonth, startYear);
+  },
+
+  /**
+   * Cancel an existing adjustment
+   */
+  cancelAdjustment: async (adjustmentId) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      const adjustment =
+        await YearOpeningAdjustment.findById(adjustmentId).session(session);
+      if (!adjustment) {
+        throw new Error("Adjustment not found");
+      }
+
+      adjustment.isCancelled = true;
+      await adjustment.save({ session });
+
+      // Optionally, trigger recalculation if needed
+      // await OpeningBalanceService.recalculateLedger(...);
+
+      await session.commitTransaction();
+      return adjustment;
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
+    }
   },
 };
 

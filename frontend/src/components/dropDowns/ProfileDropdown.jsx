@@ -255,13 +255,15 @@ useEffect(() => {
 
     // 4) Push FY to Redux if available
     //    If later you attach settings, change to activeCompany.settings?.financialYear
+
+    
     if (activeCompany?.financialYear) {
-      const fy = activeCompany.financialYear;
+      const fySettings = activeCompany.settings;
       dispatch(
         setCurrentFY({
-          currentFY: fy.currentFY,      // e.g. "2025-26" or "2025-2026"
-          startDate: fy.fyStartDate,   // ISO string from backend
-          endDate: fy.fyEndDate,
+          currentFY: fySettings.currentFY,      // e.g. "2025-26" or "2025-2026"
+          startDate: fySettings.startDate,   // ISO string from backend
+          endDate: fySettings.endDate,
         })
       );
     }else{

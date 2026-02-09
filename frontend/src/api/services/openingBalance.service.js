@@ -36,6 +36,9 @@ export const openingBalanceService = {
 
   // Cancel Adjustment (Optional/Future)
   cancelAdjustment: async (adjustmentId) => {
+
+    console.log(adjustmentId);
+    
     try {
       const res = await api.delete(`/opening-balance/adjust/${adjustmentId}`);
       return res.data;

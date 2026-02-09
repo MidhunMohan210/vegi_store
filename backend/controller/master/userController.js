@@ -68,11 +68,8 @@ export const getUserById = async (req, res) => {
       return res.status(404).json({ message: "user not found" });
     }
 
-    // Normalize to array
-    const companies = Array.isArray(user.access?.company)
-      ? user.access.company
-      : user.access?.company
-      ? [user.access.company]
+    const companies = Array.isArray(user.access)
+      ? user.access.map((a) => a.company)
       : [];
 
     if (companies.length > 0) {
@@ -85,7 +82,7 @@ export const getUserById = async (req, res) => {
         .select("company financialYear");
 
       const settingsMap = new Map(
-        settingsDocs.map((s) => [s.company.toString(), s])
+        settingsDocs.map((s) => [s.company.toString(), s]),
       );
 
       const withSettings = companies.map((c) => {
@@ -95,12 +92,24 @@ export const getUserById = async (req, res) => {
           settings: s ? s.financialYear : null, // or whole s if you prefer
         };
       });
+      console.log("withSettings", withSettings);
 
       // Put back in user object in same shape (array or single)
-      if (Array.isArray(user.access.company)) {
-        user.access.company = withSettings;
+      if (Array.isArray(user.access)) {
+        user.access = user.access.map((a) => {
+          const companyWithSettings = withSettings.find(
+            (c) => c._id.toString() === a.company._id.toString(),
+          );
+          return {
+            ...a,
+            company: companyWithSettings || a.company, // fallback to original if not found
+          };
+        });
       } else {
-        user.access.company = withSettings[0] || null;
+        const companyWithSettings = withSettings.find(
+          (c) => c._id.toString() === user.access.company._id.toString(),
+        );
+        user.access.company = companyWithSettings || user.access.company; // fallback to original if not found
       }
     }
 
