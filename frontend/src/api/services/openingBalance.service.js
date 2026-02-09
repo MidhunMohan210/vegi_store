@@ -4,12 +4,12 @@ import { api } from "../client/apiClient";
 
 export const openingBalanceService = {
   // Get year-wise balances
-  getYearWiseBalances: async (entityType, entityId, companyId, branchId) => {
+  getYearWiseBalances: async (entityType, entityId, companyId, branchId,    page = 1) => {
     try {
       const res = await api.get(
         `/opening-balance/${entityType}/${entityId}/years`,
         {
-          params: { companyId, branchId }
+          params: { companyId, branchId, page }
         }
       );
       return res.data;

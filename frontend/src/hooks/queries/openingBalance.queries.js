@@ -2,15 +2,31 @@
 import { queryOptions } from "@tanstack/react-query";
 import { openingBalanceService } from "@/api/services/openingBalance.service";
 
+// hooks/queries/openingBalance.queries.ts
 export const openingBalanceQueries = {
   all: () => ["openingBalance"],
 
-  // Get list of year-wise balances for an entity
-  list: (entityType, entityId, companyId, branchId) =>
+  list: (entityType, entityId, companyId, branchId, page) =>
     queryOptions({
-      queryKey: [...openingBalanceQueries.all(), "list", entityType, entityId, companyId, branchId],
-      queryFn: () => openingBalanceService.getYearWiseBalances(entityType, entityId, companyId, branchId),
+      queryKey: [
+        ...openingBalanceQueries.all(),
+        "list",
+        entityType,
+        entityId,
+        companyId,
+        branchId,
+        page,
+      ],
+      queryFn: () =>
+        openingBalanceService.getYearWiseBalances(
+          entityType,
+          entityId,
+          companyId,
+          branchId,
+          page
+        ),
       enabled: !!entityId && !!companyId && !!branchId,
-      staleTime: 1000 * 60 * 5, // 5 minutes cache
+      staleTime: 1000 * 60 * 5,
     }),
 };
+

@@ -15,25 +15,32 @@ export const transactionMutations = {
       queryClient.invalidateQueries({
         queryKey: ["transactions", transactionType, "", company, branch],
       });
- 
+
       queryClient.invalidateQueries({
-        queryKey: ["reports"]
+        queryKey: ["reports"],
       });
 
       queryClient.invalidateQueries({
-        queryKey: ["items"], refetchType: 'all'
+        queryKey: ["items"],
+
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["openingBalance"],
+
       });
 
       toast.success(
         `${capitalizeFirstLetter(
-          response?.data?.transaction?.transactionType || "Transaction"
-        )} created successfully!`
+          response?.data?.transaction?.transactionType || "Transaction",
+        )} created successfully!`,
       );
     },
 
     onError: (error) => {
       console.error("Transaction creation failed:", error);
-      toast.error(error.message || "Error creating transaction. Please try again.");
+      toast.error(
+        error.message || "Error creating transaction. Please try again.",
+      );
     },
   }),
 
@@ -61,19 +68,25 @@ export const transactionMutations = {
       });
 
       queryClient.invalidateQueries({
-        queryKey: ["reports"]
+        queryKey: ["reports"],
       });
 
       queryClient.invalidateQueries({
-        queryKey: ["items"], refetchType: 'all'
+        queryKey: ["items"],
+
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ["openingBalance"],
+
       });
 
       toast.success(
         `${capitalizeFirstLetter(
-          response?.data?.transaction?.transactionType || "Transaction"
-        )} updated successfully!`
+          response?.data?.transaction?.transactionType || "Transaction",
+        )} updated successfully!`,
       );
-      
+
       // Also invalidate the specific transaction query
       queryClient.invalidateQueries({
         queryKey: ["transaction", variables.id],
@@ -82,12 +95,14 @@ export const transactionMutations = {
 
     onError: (error) => {
       console.error("Transaction update failed:", error);
-      toast.error(error.message || "Error updating transaction. Please try again.");
+      toast.error(
+        error.message || "Error updating transaction. Please try again.",
+      );
     },
   }),
 
   delete: (queryClient) => ({
-    mutationFn: ({ id, transactionType, company, branch , reason}) =>
+    mutationFn: ({ id, transactionType, company, branch, reason }) =>
       transactionServices.delete(id, transactionType, company, branch, reason),
 
     onSuccess: (response, variables) => {
@@ -117,12 +132,18 @@ export const transactionMutations = {
 
       // Invalidate reports
       queryClient.invalidateQueries({
-        queryKey: ["reports"]
+        queryKey: ["reports"],
       });
 
       // Invalidate items with full refetch
       queryClient.invalidateQueries({
-        queryKey: ["items"], refetchType: 'all'
+        queryKey: ["items"],
+   
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ["openingBalance"],
+   
       });
 
       // Don't show toast here - let the component handle it for better UX control

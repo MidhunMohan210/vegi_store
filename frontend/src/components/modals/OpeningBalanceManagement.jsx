@@ -15,7 +15,6 @@ import { Badge } from "@/components/ui/badge";
 import {
   Lock,
   Edit,
-  Plus,
   AlertCircle,
   TrendingUp,
   ChevronLeft,
@@ -33,18 +32,16 @@ import { useSelector } from "react-redux";
 const OpeningBalanceManagement = ({
   open,
   onOpenChange,
-  entityType,
+  entityType, // "party" | "item"
   entityId,
   entityName,
 }) => {
+  const [page, setPage] = useState(1);
   const [editingYear, setEditingYear] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
   const [adjustmentForm, setAdjustmentForm] = useState({
     desiredOpening: "",
     reason: "",
   });
-
-  const ITEMS_PER_PAGE = 10;
 
   const companyId = useSelector(
     (state) => state.companyBranch?.selectedCompany?._id,
@@ -52,39 +49,44 @@ const OpeningBalanceManagement = ({
   const branchId = useSelector(
     (state) => state.companyBranch?.selectedBranch?._id,
   );
-
-  // 1. Fetch Data using React Query
+  
+  console.log(entityId);
+  
+``
   const {
     data: responseData,
     isLoading,
     isError,
   } = useQuery(
-    openingBalanceQueries.list(entityType, entityId, companyId, branchId),
+    openingBalanceQueries.list(entityType, entityId, companyId, branchId, page),
   );
 
   const fullData = responseData?.data || [];
+  const pagination = responseData?.pagination || {
+    page: 1,
+    pageSize: 5,
+    totalYears: 0,
+    totalPages: 1,
+  };
 
-  // 2. Mutation for saving
+  const currentPage = pagination.page;
+  const totalPages = pagination.totalPages;
+
   const { mutate: saveAdjustment, isPending: isSaving } =
     useSaveOpeningAdjustment();
-
-  // Pagination Logic
-  const totalPages = Math.ceil(fullData.length / ITEMS_PER_PAGE);
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const currentData = fullData.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
   const handleEditAdjustment = (year) => {
     setEditingYear(year);
     const yearInfo = fullData.find((y) => y.financialYear === year);
+    if (!yearInfo) return;
 
-    // Calculate current effective value/amount
     const currentValue =
       entityType === "item"
-        ? yearInfo.effectiveQuantity || yearInfo.openingQuantity
-        : yearInfo.effectiveOpening || yearInfo.openingBalance;
+        ? (yearInfo.effectiveQuantity ?? yearInfo.openingQuantity)
+        : (yearInfo.effectiveOpening ?? yearInfo.openingBalance);
 
     setAdjustmentForm({
-      desiredOpening: currentValue || "",
+      desiredOpening: currentValue ?? "",
       reason: yearInfo.adjustment ? "Update adjustment" : "",
     });
   };
@@ -98,21 +100,16 @@ const OpeningBalanceManagement = ({
     const yearInfo = fullData.find((y) => y.financialYear === editingYear);
     if (!yearInfo) return;
 
-    // Calculate adjustment amount (New Total - Original Carry Forward)
-    // Formula: Adjustment = Desired Effective - Original Opening (without adjustment)
-
     let adjustmentAmount = 0;
 
     if (entityType === "party") {
-      const originalBase = yearInfo.openingBalance; // Base carry forward
+      const originalBase = yearInfo.openingBalance || 0;
       const desired = parseFloat(adjustmentForm.desiredOpening);
       adjustmentAmount = desired - originalBase;
     } else {
-      // Item logic (Quantity based for now)
-      const originalBase = yearInfo.openingQuantity;
+      const originalBase = yearInfo.openingQuantity || 0;
       const desired = parseFloat(adjustmentForm.desiredOpening);
       adjustmentAmount = desired - originalBase;
-      // Note: Item value adjustment logic would go here if needed
     }
 
     saveAdjustment(
@@ -120,7 +117,7 @@ const OpeningBalanceManagement = ({
         entityId,
         entityType,
         financialYear: editingYear,
-        adjustmentAmount: adjustmentAmount, // Send delta
+        adjustmentAmount,
         reason: adjustmentForm.reason,
         companyId,
         branchId,
@@ -134,22 +131,20 @@ const OpeningBalanceManagement = ({
     );
   };
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat("en-IN", {
+  const formatCurrency = (amount) =>
+    new Intl.NumberFormat("en-IN", {
       style: "currency",
       currency: "INR",
       maximumFractionDigits: 0,
     }).format(amount || 0);
-  };
+    
+    const formatNumber = (num) => new Intl.NumberFormat("en-IN").format(num || 0);
 
-  const formatNumber = (num) => {
-    return new Intl.NumberFormat("en-IN").format(num || 0);
-  };
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-7xl w-[90vw] h-[90vh] p-0 overflow-hidden flex flex-col bg-white dark:bg-zinc-950 dark:border-zinc-800">
+        <DialogContent className="sm:max-w-7xl w-[90vw] h-[70vh] p-0 overflow-hidden flex flex-col bg-white dark:bg-zinc-950 dark:border-zinc-800">
           {/* Header */}
           <DialogHeader className="px-6 pt-5 pb-4 border-b border-slate-200 dark:border-zinc-800 flex-shrink-0 bg-slate-50 dark:bg-zinc-900">
             <div className="flex items-center gap-3">
@@ -167,16 +162,14 @@ const OpeningBalanceManagement = ({
             </div>
           </DialogHeader>
 
-          {/* Content Area */}
+          {/* Content */}
           <div className="flex-1 overflow-auto p-6 bg-white dark:bg-zinc-950 relative">
-            {/* Loading State */}
             {isLoading && (
               <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-zinc-950/50 z-10">
                 <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
               </div>
             )}
 
-            {/* Error State */}
             {isError && (
               <div className="text-center text-red-500 py-10 text-sm">
                 Failed to load opening balances. Please try again.
@@ -184,7 +177,6 @@ const OpeningBalanceManagement = ({
             )}
 
             {!isLoading && !isError && entityType === "party" && (
-              // Party Table
               <div className="border border-slate-200 dark:border-zinc-800 rounded-lg overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[800px]">
@@ -214,13 +206,14 @@ const OpeningBalanceManagement = ({
                       </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-zinc-950 divide-y divide-slate-200 dark:divide-zinc-800">
-                      {currentData.map((year) => (
+                      {fullData.map((year) => (
                         <tr
                           key={year.financialYear}
-                          className={`
-                            ${year.isCurrent ? "bg-blue-50/50 dark:bg-blue-900/10" : ""}
-                            hover:bg-slate-50 dark:hover:bg-zinc-900/50 transition-colors
-                          `}
+                          className={`${
+                            year.isCurrent
+                              ? "bg-blue-50/50 dark:bg-blue-900/10"
+                              : ""
+                          } hover:bg-slate-50 dark:hover:bg-zinc-900/50 transition-colors`}
                         >
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-2">
@@ -257,7 +250,11 @@ const OpeningBalanceManagement = ({
                           <td className="py-3 px-4 text-right">
                             {year.adjustment ? (
                               <span
-                                className={`text-sm font-bold ${year.adjustment > 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
+                                className={`text-sm font-bold ${
+                                  year.adjustment > 0
+                                    ? "text-green-600 dark:text-green-400"
+                                    : "text-red-600 dark:text-red-400"
+                                }`}
                               >
                                 {year.adjustment > 0 ? "+" : ""}
                                 {formatCurrency(year.adjustment)}
@@ -274,7 +271,7 @@ const OpeningBalanceManagement = ({
                             </span>
                           </td>
                           <td className="py-3 px-4 text-right">
-                            {year.closingBalance ? (
+                            {year.closingBalance != null ? (
                               <span className="text-sm text-slate-700 dark:text-zinc-300">
                                 {formatCurrency(year.closingBalance)}
                               </span>
@@ -315,7 +312,6 @@ const OpeningBalanceManagement = ({
             )}
 
             {!isLoading && !isError && entityType === "item" && (
-              // Item Table Logic (Same structure as Party but with item columns)
               <div className="border border-slate-200 dark:border-zinc-800 rounded-lg overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[1000px]">
@@ -351,10 +347,14 @@ const OpeningBalanceManagement = ({
                       </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-zinc-950 divide-y divide-slate-200 dark:divide-zinc-800">
-                      {currentData.map((year) => (
+                      {fullData.map((year) => (
                         <tr
                           key={year.financialYear}
-                          className={`hover:bg-slate-50 dark:hover:bg-zinc-900/50 ${year.isCurrent ? "bg-blue-50/50 dark:bg-blue-900/10" : ""}`}
+                          className={`hover:bg-slate-50 dark:hover:bg-zinc-900/50 ${
+                            year.isCurrent
+                              ? "bg-blue-50/50 dark:bg-blue-900/10"
+                              : ""
+                          }`}
                         >
                           <td className="py-3 px-4 font-bold text-sm text-slate-900 dark:text-zinc-100">
                             {year.financialYear}
@@ -371,7 +371,11 @@ const OpeningBalanceManagement = ({
                           <td className="py-3 px-4 text-right text-sm">
                             {year.adjustmentQuantity ? (
                               <span
-                                className={`${year.adjustmentQuantity > 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"} font-bold`}
+                                className={`${
+                                  year.adjustmentQuantity > 0
+                                    ? "text-green-600 dark:text-green-400"
+                                    : "text-red-600 dark:text-red-400"
+                                } font-bold`}
                               >
                                 {year.adjustmentQuantity > 0 ? "+" : ""}
                                 {formatNumber(year.adjustmentQuantity)}
@@ -385,7 +389,11 @@ const OpeningBalanceManagement = ({
                           <td className="py-3 px-4 text-right text-sm">
                             {year.adjustmentValue ? (
                               <span
-                                className={`${year.adjustmentValue > 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"} font-bold`}
+                                className={`${
+                                  year.adjustmentValue > 0
+                                    ? "text-green-600 dark:text-green-400"
+                                    : "text-red-600 dark:text-red-400"
+                                } font-bold`}
                               >
                                 {year.adjustmentValue > 0 ? "+" : ""}
                                 {formatCurrency(year.adjustmentValue)}
@@ -434,15 +442,17 @@ const OpeningBalanceManagement = ({
             <div className="text-xs text-slate-500 dark:text-zinc-400">
               Showing{" "}
               <span className="font-medium text-slate-900 dark:text-zinc-200">
-                {Math.min(startIndex + 1, fullData.length)}
+                {fullData.length
+                  ? (pagination.page - 1) * pagination.pageSize + 1
+                  : 0}
               </span>{" "}
               to{" "}
               <span className="font-medium text-slate-900 dark:text-zinc-200">
-                {Math.min(startIndex + ITEMS_PER_PAGE, fullData.length)}
+                {(pagination.page - 1) * pagination.pageSize + fullData.length}
               </span>{" "}
               of{" "}
               <span className="font-medium text-slate-900 dark:text-zinc-200">
-                {fullData.length}
+                {pagination.totalYears}
               </span>{" "}
               entries
             </div>
@@ -452,7 +462,7 @@ const OpeningBalanceManagement = ({
                 variant="outline"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => setCurrentPage(1)}
+                onClick={() => setPage(1)}
                 disabled={currentPage === 1}
               >
                 <ChevronsLeft className="h-4 w-4" />
@@ -461,7 +471,7 @@ const OpeningBalanceManagement = ({
                 variant="outline"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -473,9 +483,7 @@ const OpeningBalanceManagement = ({
                 variant="outline"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() =>
-                  setCurrentPage((p) => Math.min(totalPages, p + 1))
-                }
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages || totalPages === 0}
               >
                 <ChevronRight className="h-4 w-4" />
@@ -484,7 +492,7 @@ const OpeningBalanceManagement = ({
                 variant="outline"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => setCurrentPage(totalPages)}
+                onClick={() => setPage(totalPages)}
                 disabled={currentPage === totalPages || totalPages === 0}
               >
                 <ChevronsRight className="h-4 w-4" />

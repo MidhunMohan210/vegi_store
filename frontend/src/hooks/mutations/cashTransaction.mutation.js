@@ -36,6 +36,11 @@ export const cashtransactionMutations = {
           queryKey: ["accountMaster"],
         });
       }
+
+      queryClient.invalidateQueries({
+        queryKey: ["openingBalance"],
+
+      });
     },
 
     onError: (error) => {
@@ -71,6 +76,11 @@ export const cashtransactionMutations = {
           queryKey: ["accountMaster"],
         });
       }
+
+      queryClient.invalidateQueries({
+        queryKey: ["openingBalance"],
+
+      });
     },
 
     onError: (error) => {
@@ -102,6 +112,11 @@ export const cashtransactionMutations = {
       // Invalidate account master
       queryClient.invalidateQueries({
         queryKey: ["accountMaster"],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ["openingBalance"],
+
       });
 
       toast.success(
