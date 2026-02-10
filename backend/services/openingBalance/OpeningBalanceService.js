@@ -43,7 +43,7 @@ const OpeningBalanceService = {
 
       // FY start month from Company (locked), fallback to 4 (April)
       let startMonth = fyConfig.startMonth || 4;
-      const endMonth = fyConfig.endMonth || ((startMonth + 11 - 1) % 12) + 1; // derived, not used in label logic
+      const endMonth = fyConfig.endMonth || ((startMonth + 11 - 1) % 12) + 1;
 
       const startingYear = fyConfig.startingYear || 2000;
 
@@ -186,14 +186,19 @@ const OpeningBalanceService = {
         pageFYs,
       });
 
-      // 10. Build chain for these FYs (ascending for chaining)
-      const pageFYsAsc = [...pageFYs].sort((a, b) => a - b);
-      console.log("📆 pageFYsAsc (for chaining):", pageFYsAsc);
+      // 10. Build FULL chain from startingYear to max year on this page
+      const maxPageFY = Math.max(...pageFYs);
+      const allFYsForChain = [];
+      for (let y = startingYear; y <= maxPageFY; y++) {
+        allFYsForChain.push(y);
+      }
+
+      console.log("📆 allFYsForChain (for chaining):", allFYsForChain);
 
       const resultChain = [];
       let previousClosing = null;
 
-      for (const y of pageFYsAsc) {
+      for (const y of allFYsForChain) {
         const fyStr = y.toString();
         const yearData = fyMap.get(fyStr);
         const adjustment = adjustments.find((a) => a.financialYear === fyStr);
@@ -215,7 +220,7 @@ const OpeningBalanceService = {
           adjustment: null,
           effectiveOpening: 0,
           closingBalance: null,
-          isLocked: y < currentFY - 1,
+          isLocked: false,
           isCurrent: y === currentFY,
           pendingAdjustment: pendingDelta,
         };
@@ -231,44 +236,11 @@ const OpeningBalanceService = {
             `  ▶ FY ${fyStr}: opening from previousClosing ${previousClosing}`,
           );
         } else {
-          // previous FY not on this page → approximate from fyMap or master
-          const prevFYStr = (y - 1).toString();
-          const prevYearData = fyMap.get(prevFYStr);
-          if (prevYearData && prevYearData.months.length > 0) {
-            prevYearData.months.sort((a, b) =>
-              a.year === b.year ? a.month - b.month : a.year - b.year,
-            );
-            const prevFirst = prevYearData.months[0];
-            const prevLast =
-              prevYearData.months[prevYearData.months.length - 1];
-
-            const prevYearMovement =
-              (prevLast.closingBalance ?? 0) - (prevFirst.openingBalance ?? 0);
-
-            const prevOpening =
-              prevFYStr === startingYear.toString() ? masterOpening : 0;
-
-            const prevEffectiveOpening = prevOpening; // ignoring prev adjustments for this approximation
-            const prevClosingCalc = prevEffectiveOpening + prevYearMovement;
-
-            previousClosing = prevClosingCalc;
-            node.openingBalance = prevClosingCalc;
-
-            console.log(
-              `  ▶ FY ${fyStr}: opening from prev FY ${prevFYStr} movement`,
-              {
-                prevFirstOpening: prevFirst.openingBalance,
-                prevLastClosing: prevLast.closingBalance,
-                prevYearMovement,
-                prevClosingCalc,
-              },
-            );
-          } else {
-            node.openingBalance = masterOpening;
-            console.log(
-              `  ▶ FY ${fyStr}: opening fallback to master ${masterOpening}`,
-            );
-          }
+          // Fallback (should rarely happen now)
+          node.openingBalance = masterOpening;
+          console.log(
+            `  ▶ FY ${fyStr}: opening fallback to master ${masterOpening}`,
+          );
         }
 
         // --- YEAR OPENING ADJUSTMENT ---
@@ -276,8 +248,7 @@ const OpeningBalanceService = {
           node.adjustment = adjustment.adjustmentAmount;
           node.effectiveOpening =
             node.openingBalance + adjustment.adjustmentAmount;
-
-          node.adjustmentId = adjustment._id; // for potential future cancellation
+          node.adjustmentId = adjustment._id;
         } else {
           node.effectiveOpening = node.openingBalance;
         }
@@ -315,15 +286,20 @@ const OpeningBalanceService = {
         resultChain.push(node);
       }
 
-      // sort desc for UI (latest year first)
-      resultChain.sort(
+      // 11. Filter for only the years on this page
+      const displayYears = resultChain.filter((node) =>
+        pageFYs.includes(Number(node.financialYear)),
+      );
+
+      // Sort desc for UI (latest year first)
+      displayYears.sort(
         (a, b) => Number(b.financialYear) - Number(a.financialYear),
       );
 
-      console.log("✅ Final resultChain:", resultChain);
+      console.log("✅ Final displayYears:", displayYears);
 
       return {
-        years: resultChain,
+        years: displayYears,
         pagination: {
           page: safePage,
           pageSize: PAGE_SIZE,

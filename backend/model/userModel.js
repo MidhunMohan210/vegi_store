@@ -28,9 +28,9 @@ const userSchema = new Schema(
   }
 );
 
-// Explicitly define indexes to ensure consistency
-userSchema.index({ email: 1 }, { unique: true });
-userSchema.index({ aadharNumber: 1 }, { unique: true, sparse: true });
+// // Explicitly define indexes to ensure consistency
+// userSchema.index({ email: 1 }, { unique: true });
+// userSchema.index({ aadharNumber: 1 }, { unique: true, sparse: true });
 
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();

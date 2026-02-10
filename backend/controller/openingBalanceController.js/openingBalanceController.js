@@ -9,6 +9,8 @@ import OpeningBalanceService from "../../services/openingBalance/OpeningBalanceS
 
 export const getYearWiseBalances = async (req, res) => {
   try {
+
+    // throw new Error("Intentional error for testing");
     const { entityType, entityId } = req.params;
     const { companyId, branchId, page } = req.query;
 

@@ -171,10 +171,10 @@ export const CompanySchema = new mongoose.Schema(
   },
 );
 
-// Index for faster queries
-CompanySchema.index({ email: 1 });
-CompanySchema.index({ gstNumber: 1 });
-CompanySchema.index({ status: 1 });
+// // Index for faster queries
+// CompanySchema.index({ email: 1 });
+// CompanySchema.index({ gstNumber: 1 });
+// CompanySchema.index({ status: 1 });
 
 // ✅ Helper function to get current FY based on format and current date
 function getCurrentFinancialYear(startMonth) {

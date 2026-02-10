@@ -15,6 +15,9 @@ export const useUpdateFinancialYear = (companyId) => {
     onSuccess: (res) => {
       // res.data = updated settings document
       const fy = res?.data?.financialYear;
+
+      console.log(fy);
+      
       if (fy) {
         dispatch(
           setCurrentFY({

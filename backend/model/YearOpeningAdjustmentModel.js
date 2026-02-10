@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
 
-
 const yearOpeningAdjustmentSchema = new mongoose.Schema(
   {
     // Entity Reference
@@ -8,13 +7,13 @@ const yearOpeningAdjustmentSchema = new mongoose.Schema(
       type: String,
       required: true,
       index: true,
-      trim: true
+      trim: true,
     },
 
     entityType: {
       type: String,
       required: true,
-      enum: ['party', 'item']
+      enum: ["party", "item"],
     },
 
     // Financial Year
@@ -22,64 +21,68 @@ const yearOpeningAdjustmentSchema = new mongoose.Schema(
       type: String,
       required: true,
       index: true,
-      trim: true
+      trim: true,
     },
 
     // Adjustment Values
     adjustmentAmount: {
       type: Number,
-      default: 0
+      default: 0,
     },
 
     adjustmentQuantity: {
       type: Number,
-      default: 0
+      default: 0,
     },
 
     // Audit Information
     reason: {
       type: String,
       required: true,
-      trim: true
+      trim: true,
     },
 
     createdBy: {
       type: String,
-      required: true
+      required: true,
     },
 
     updatedBy: {
-      type: String
+      type: String,
     },
 
     // Cancellation
     isCancelled: {
       type: Boolean,
-      default: false
+      default: false,
     },
 
     cancelledAt: {
-      type: Date
+      type: Date,
     },
 
     cancelledBy: {
-      type: String
+      type: String,
     },
 
     cancellationReason: {
-      type: String
-    }
+      type: String,
+    },
   },
   {
     timestamps: true,
-    collection: 'yearopeningadjustments'
-  }
+    collection: "yearopeningadjustments",
+  },
 );
 
 // Compound Indexes
 yearOpeningAdjustmentSchema.index(
-  { entityId: 1, entityType: 1, financialYear: 1 ,isCancelled: 1},
-  { unique: true, name: 'unique_entity_year' }
+  { entityId: 1, entityType: 1, financialYear: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { isCancelled: false },
+    name: "unique_active_entity_year",
+  },
 );
 
 yearOpeningAdjustmentSchema.index({ financialYear: 1 });
@@ -87,7 +90,7 @@ yearOpeningAdjustmentSchema.index({ entityType: 1, financialYear: 1 });
 yearOpeningAdjustmentSchema.index({ isCancelled: 1 });
 
 // Instance Methods
-yearOpeningAdjustmentSchema.methods.cancel = function(userId, reason) {
+yearOpeningAdjustmentSchema.methods.cancel = function (userId, reason) {
   this.isCancelled = true;
   this.cancelledAt = new Date();
   this.cancelledBy = userId;
@@ -96,15 +99,21 @@ yearOpeningAdjustmentSchema.methods.cancel = function(userId, reason) {
 };
 
 // Static Methods
-yearOpeningAdjustmentSchema.statics.findByEntity = function(entityId, entityType) {
-  return this.find({ 
-    entityId, 
-    entityType, 
-    isCancelled: false 
+yearOpeningAdjustmentSchema.statics.findByEntity = function (
+  entityId,
+  entityType,
+) {
+  return this.find({
+    entityId,
+    entityType,
+    isCancelled: false,
   }).sort({ financialYear: 1 });
 };
 
-yearOpeningAdjustmentSchema.statics.findByYear = function(financialYear, entityType = null) {
+yearOpeningAdjustmentSchema.statics.findByYear = function (
+  financialYear,
+  entityType = null,
+) {
   const query = { financialYear, isCancelled: false };
   if (entityType) {
     query.entityType = entityType;
@@ -112,27 +121,31 @@ yearOpeningAdjustmentSchema.statics.findByYear = function(financialYear, entityT
   return this.find(query);
 };
 
-yearOpeningAdjustmentSchema.statics.getAdjustment = function(entityId, entityType, financialYear) {
-  return this.findOne({ 
-    entityId, 
-    entityType, 
-    financialYear, 
-    isCancelled: false 
+yearOpeningAdjustmentSchema.statics.getAdjustment = function (
+  entityId,
+  entityType,
+  financialYear,
+) {
+  return this.findOne({
+    entityId,
+    entityType,
+    financialYear,
+    isCancelled: false,
   });
 };
 
 // Pre-save Validation
-yearOpeningAdjustmentSchema.pre('save', function(next) {
+yearOpeningAdjustmentSchema.pre("save", function (next) {
   const yearRegex = /^\d{4}$/;
   if (!yearRegex.test(this.financialYear)) {
-    return next(new Error('Financial year must be in YYYY format'));
+    return next(new Error("Financial year must be in YYYY format"));
   }
   next();
 });
 
 const YearOpeningAdjustment = mongoose.model(
-  'YearOpeningAdjustment', 
-  yearOpeningAdjustmentSchema
+  "YearOpeningAdjustment",
+  yearOpeningAdjustmentSchema,
 );
 
-export default YearOpeningAdjustment
+export default YearOpeningAdjustment;

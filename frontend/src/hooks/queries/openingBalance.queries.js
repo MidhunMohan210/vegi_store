@@ -27,6 +27,8 @@ export const openingBalanceQueries = {
         ),
       enabled: !!entityId && !!companyId && !!branchId,
       staleTime: 1000 * 60 * 5,
+      refetchOnWindowFocus: false,
+      
     }),
 };
 

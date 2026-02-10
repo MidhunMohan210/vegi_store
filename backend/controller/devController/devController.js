@@ -2,23 +2,35 @@ import mongoose from "mongoose";
 
 export const syncIndexes = async (req, res) => {
   try {
-    const modelNames = mongoose.modelNames(); // Gets all registered model names
-    console.log(modelNames);
+    const modelNames = mongoose.modelNames();
+    console.log("All models:", modelNames);
 
     for (const name of modelNames) {
+      if (name === 'User') {
+        console.log(`Skipped syncing indexes for model: ${name}`);
+        continue;
+      }
+
+      console.log(`About to sync model: ${name}`);
       const model = mongoose.model(name);
+      
+      // Log what indexes this model will create
+      console.log(`${name} schema indexes:`, model.schema.indexes());
+      
       await model.syncIndexes();
-      console.log(`Synced indexes for model: ${name}`);
+      console.log(`✓ Synced indexes for model: ${name}`);
     }
 
     res.status(200).json({ message: "All indexes synced successfully" });
   } catch (error) {
     console.error("Index sync error:", error);
-    res
-      .status(500)
-      .json({ message: "Index sync failed", error: error.message });
+    res.status(500).json({ 
+      message: "Index sync failed", 
+      error: error.message 
+    });
   }
 };
+
 
 export const fixAllTransactionIndexes = async () => {
   try {
@@ -73,6 +85,7 @@ export const deleteData = async (req, res) => {
       "PurchaseReturn",
       "StockAdjustment",
       "OutstandingOffset",
+      "YearOpeningAdjustment"
     ];
 
     const baseFilter = {};

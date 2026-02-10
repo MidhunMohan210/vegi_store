@@ -60,6 +60,7 @@ const OpeningBalanceManagement = ({
     data: responseData,
     isLoading,
     isError,
+    refetch
   } = useQuery(
     openingBalanceQueries.list(entityType, entityId, companyId, branchId, page),
   );
@@ -84,14 +85,14 @@ const OpeningBalanceManagement = ({
     setEditingYear(year);
 
     console.log(fullData);
-    
+
     const yearInfo = fullData.find((y) => y.financialYear === year);
     if (!yearInfo) return;
 
     const currentValue =
       entityType === "item"
-        ? yearInfo.effectiveQuantity ?? yearInfo.openingQuantity
-        : yearInfo.effectiveOpening ?? yearInfo.openingBalance;
+        ? (yearInfo.effectiveQuantity ?? yearInfo.openingQuantity)
+        : (yearInfo.effectiveOpening ?? yearInfo.openingBalance);
 
     setAdjustmentForm({
       desiredOpening: currentValue ?? "",
@@ -109,13 +110,26 @@ const OpeningBalanceManagement = ({
   };
 
   const handleSaveAdjustment = () => {
+    const yearInfo = fullData.find((y) => y.financialYear === editingYear);
+    if (!yearInfo) return;
+
     if (!adjustmentForm.desiredOpening || !adjustmentForm.reason) {
       toast.error("Please fill all fields");
       return;
     }
 
-    const yearInfo = fullData.find((y) => y.financialYear === editingYear);
-    if (!yearInfo) return;
+    /// check if no change in the amount then do not proceed
+
+    const originalBase =
+      entityType === "party"
+        ? yearInfo.openingBalance
+        : yearInfo.openingQuantity;
+    const desired = parseFloat(adjustmentForm.desiredOpening);
+
+    if (originalBase === desired) {
+      toast.error("No change in opening balance");
+      return;
+    }
 
     let adjustmentAmount = 0;
 
@@ -148,12 +162,9 @@ const OpeningBalanceManagement = ({
   };
 
   const handleDeleteAdjustment = () => {
-
     console.log("editingAdjustmentId", editingAdjustmentId);
-    
+
     if (!editingAdjustmentId) return;
-
-
 
     deleteAdjustment(
       { adjustmentId: editingAdjustmentId },
@@ -204,8 +215,17 @@ const OpeningBalanceManagement = ({
             )}
 
             {isError && (
-              <div className="text-center text-red-500 py-10 text-sm">
-                Failed to load opening balances. Please try again.
+              <div className="flex flex-col items-center justify-center  h-full">
+                <Button
+                  variant="outline"
+                  className="mx-auto  bg-blue-600 text-white hover:bg-blue-700 hover:text-white cursor-pointer"
+                  onClick={() => refetch()}
+                >
+                  Retry
+                </Button>
+                <div className="text-center text-gray-500 mt-2 text-sm">
+                  Failed to load opening balances. Please try again.
+                </div>
               </div>
             )}
 
@@ -536,10 +556,7 @@ const OpeningBalanceManagement = ({
       </Dialog>
 
       {/* Edit Adjustment Modal */}
-      <Dialog
-        open={editingYear !== null}
-        onOpenChange={() => resetEditState()}
-      >
+      <Dialog open={editingYear !== null} onOpenChange={() => resetEditState()}>
         <DialogContent className="max-w-md bg-white dark:bg-zinc-950 dark:border-zinc-800">
           <DialogHeader>
             <DialogTitle className="dark:text-zinc-50">
