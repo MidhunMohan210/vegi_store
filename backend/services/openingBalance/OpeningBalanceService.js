@@ -6,16 +6,13 @@ import CompanySettings from "../../model/CompanySettings.model.js";
 import AccountMaster from "../../model/masters/AccountMasterModel.js";
 import AdjustmentEntryModel from "../../model/AdjustmentEntryModel.js";
 import Company from "../../model/masters/CompanyModel.js";
+import { getFinancialYearForDate } from "../../helpers/CommonTransactionHelper/openingBalanceHelper.js";
+import { transactionModelToType } from "../../helpers/transactionHelpers/transactionMappers.js";
 
 const PAGE_SIZE = 5;
 
 // Helper: get FY label (number) for a given Date and FY startMonth
-function getFinancialYearForDate(date, startMonth) {
-  const m = date.getMonth() + 1; // 1–12
-  const y = date.getFullYear();
-  // If month >= FY start, FY = same calendar year, else previous
-  return m >= startMonth ? y : y - 1;
-}
+
 const OpeningBalanceService = {
   getYearWiseBalances: async (
     entityId,
@@ -106,6 +103,7 @@ const OpeningBalanceService = {
       );
 
       // 5. Pending AdjustmentEntry deltas (not yet pushed to ledger)
+      // 5. Pending AdjustmentEntry deltas (not yet pushed to ledger)
       const pendingAdjustments = await AdjustmentEntryModel.find({
         affectedAccount: entityId,
         branch: branchId,
@@ -118,6 +116,7 @@ const OpeningBalanceService = {
         pendingAdjustments.map((p) => ({
           originalTransactionDate: p.originalTransactionDate,
           amountDelta: p.amountDelta,
+          voucherType: p.voucherType,
         })),
       );
 
@@ -126,8 +125,31 @@ const OpeningBalanceService = {
         const d = new Date(adj.originalTransactionDate);
         const fy = getFinancialYearForDate(d, startMonth);
         const k = fy.toString();
+
+        // Get voucher type from model name
+        const voucherType = transactionModelToType(
+          adj.originalTransactionModel,
+        );
+
+        console.log("voucherType", voucherType);
+        
+
+        // Determine sign based on voucher type
+        const crVouchers = ["purchase", "sales_return", "receipt"];
+
+        let signedDelta = adj.amountDelta || 0;
+
+        console.log("signedDelta", signedDelta);
+        
+
+        if (crVouchers.includes(voucherType)) {
+          signedDelta = -(signedDelta);
+        } else {
+          signedDelta = signedDelta;
+        }
+
         if (!pendingByFY.has(k)) pendingByFY.set(k, 0);
-        pendingByFY.set(k, pendingByFY.get(k) + (adj.amountDelta || 0));
+        pendingByFY.set(k, pendingByFY.get(k) + signedDelta);
       });
 
       console.log(

@@ -74,6 +74,11 @@ const TransactionHeader = ({
               portalId="root"
               minDate={isDev ? null : minDate}
               maxDate={isDev ? null : maxDate}
+              showYearDropdown
+              showMonthDropdown
+              dropdownMode="select"
+              scrollableYearDropdown
+              yearDropdownItemNumber={15}
             />
           </div>
         </div>

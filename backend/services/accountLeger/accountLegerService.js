@@ -4,6 +4,9 @@ import AccountLedger from "../../model/AccountLedgerModel.js";
 import AccountMonthlyBalance from "../../model/AccountMonthlyBalanceModel.js";
 import AdjustmentEntry from "../../model/AdjustmentEntryModel.js";
 import AccountMasterModel from "../../model/masters/AccountMasterModel.js";
+import Company from "../../model/masters/CompanyModel.js";
+import { getFinancialYearForDate } from "../../helpers/CommonTransactionHelper/openingBalanceHelper.js";
+import YearOpeningAdjustment from "../../model/YearOpeningAdjustmentModel.js";
 
 const toObjectId = (id) => new mongoose.Types.ObjectId(id);
 
@@ -11,9 +14,10 @@ const toObjectId = (id) => new mongoose.Types.ObjectId(id);
 // CORE UTILITY FUNCTIONS
 // =============================================================================
 
+
 /**
  * Calculate opening balances for multiple accounts at once (BATCHED)
- * Now checks backward for clean periods dynamically instead of hard-coded base date
+ * Now includes year opening adjustments in the calculation
  */
 export const getBatchOpeningBalances = async (
   company,
@@ -46,6 +50,18 @@ export const getBatchOpeningBalances = async (
   const prevMonthNum = prevMonthDate.getMonth() + 1;
 
   console.log("Calculated previous month:", { prevYear, prevMonthNum });
+
+  // STEP 0: Get company FY config to determine which FY the selectedDate falls into
+  console.time("Step 0 - Company FY config");
+  const companyDoc = await Company.findById(companyId).lean();
+  const fyConfig = companyDoc?.financialYear || {};
+  const startMonth = fyConfig.startMonth || 4; // Default April
+  const startingYear = fyConfig.startingYear || 2000;
+  
+  // Calculate which FY the selectedDate belongs to
+  const selectedDateFY = getFinancialYearForDate(selectedDate, startMonth);
+  console.timeEnd("Step 0 - Company FY config");
+  console.log("Selected date FY:", selectedDateFY);
 
   // STEP 1: Get last CLEAN monthly balance (look backward without date constraint)
   console.time("Step 1 - Monthly balances query");
@@ -121,7 +137,6 @@ export const getBatchOpeningBalances = async (
   const accountsWithTxnIds = accountsWithTransactions.map((a) => a._id.toString());
 
   // STEP 4: Fetch AccountMaster for ALL accounts needing fallback
-  // (Not just those with transactions - opening balance is needed regardless)
   let masterBalances = [];
   if (accountsNeedingFallback.length > 0) {
     console.time("Step 2b - Account master query");
@@ -138,13 +153,10 @@ export const getBatchOpeningBalances = async (
     const accountKey = master._id.toString();
     baseBalances[accountKey] = master.openingBalance || 0;
     
-    // Find earliest transaction date for this account (if exists)
     const txnInfo = accountsWithTransactions.find(
       (a) => a._id.toString() === accountKey
     );
     
-    // If account has transactions, dirty period starts from earliest transaction
-    // If no transactions, dirty period starts from selectedDate (so range is empty)
     dirtyPeriodStarts[accountKey] = txnInfo?.earliestTransaction || selectedDate;
   });
 
@@ -153,11 +165,58 @@ export const getBatchOpeningBalances = async (
     const accountKey = id.toString();
     if (baseBalances[accountKey] === undefined) {
       baseBalances[accountKey] = 0;
-      dirtyPeriodStarts[accountKey] = selectedDate; // No dirty period
+      dirtyPeriodStarts[accountKey] = selectedDate;
     }
   });
 
   console.log("Base balances initialized:", Object.keys(baseBalances).length);
+
+  // STEP 4.5: Get year opening adjustments for all FYs from startingYear to selectedDateFY
+  console.time("Step 2c - Year opening adjustments query");
+  const allFYsToQuery = [];
+  for (let y = startingYear; y <= selectedDateFY; y++) {
+    allFYsToQuery.push(y.toString());
+  }
+
+  const yearOpeningAdjustments = await YearOpeningAdjustment.find({
+    entityId: { $in: accountIds },
+    entityType: 'party',
+    financialYear: { $in: allFYsToQuery },
+    isCancelled: false,
+  }).lean();
+  console.timeEnd("Step 2c - Year opening adjustments query");
+  console.log("Year opening adjustments found:", yearOpeningAdjustments.length);
+
+  // Group adjustments by account and build cumulative adjustment up to selectedDateFY
+  const cumulativeAdjustments = {};
+  
+  accountIds.forEach((accountId) => {
+    const accountKey = accountId.toString();
+    let totalAdjustment = 0;
+    
+    // Sum all adjustments from startingYear up to and including the FY before selectedDateFY
+    // (adjustments affect the opening of their year and carry forward)
+    const accountAdjustments = yearOpeningAdjustments.filter(
+      (adj) => adj.entityId === accountKey && Number(adj.financialYear) <= selectedDateFY
+    );
+    
+    accountAdjustments.forEach((adj) => {
+      totalAdjustment += adj.adjustmentAmount || 0;
+    });
+    
+    if (totalAdjustment !== 0) {
+      cumulativeAdjustments[accountKey] = totalAdjustment;
+      console.log(`Account ${accountKey}: cumulative adjustment = ${totalAdjustment}`);
+    }
+  });
+
+  // Apply cumulative adjustments to base balances
+  Object.keys(cumulativeAdjustments).forEach((accountKey) => {
+    if (baseBalances[accountKey] !== undefined) {
+      baseBalances[accountKey] += cumulativeAdjustments[accountKey];
+      console.log(`Applied adjustment to ${accountKey}: ${baseBalances[accountKey]}`);
+    }
+  });
 
   const dirtyPeriodEnd = new Date(selectedDate);
   dirtyPeriodEnd.setHours(0, 0, 0, 0);
@@ -169,7 +228,6 @@ export const getBatchOpeningBalances = async (
       const accountKey = id.toString();
       const startDate = dirtyPeriodStarts[accountKey];
       
-      // Skip if no dirty period (e.g., no transactions exist)
       if (!startDate || startDate >= dirtyPeriodEnd) {
         return null;
       }
@@ -182,7 +240,7 @@ export const getBatchOpeningBalances = async (
         },
       };
     })
-    .filter(Boolean); // Remove null entries
+    .filter(Boolean);
 
   let ledgerMovements = [];
   if (ledgerMatchConditions.length > 0) {
@@ -216,7 +274,7 @@ export const getBatchOpeningBalances = async (
   console.timeEnd("Step 3 - Ledger movements query");
   console.log("Ledger movements found:", ledgerMovements.length);
 
-  // STEP 6: Get adjustments
+  // STEP 6: Get adjustments (AdjustmentEntry - these are different from year opening adjustments)
   console.time("Step 4 - Adjustment movements query");
   const adjustmentMatchConditions = accountIdObjs.map((id) => ({
     affectedAccount: id,

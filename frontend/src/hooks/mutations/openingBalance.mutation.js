@@ -20,6 +20,9 @@ export const useSaveOpeningAdjustment = () => {
           variables.entityId,
         ],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["reports"],
+      });
 
       // Optionally invalidate account/item details if needed
       // queryClient.invalidateQueries(["accountMaster", "detail", variables.entityId]);
@@ -34,13 +37,13 @@ export const useDeleteOpeningAdjustment = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (payload) => openingBalanceService.cancelAdjustment(payload.adjustmentId),
+    mutationFn: (payload) =>
+      openingBalanceService.cancelAdjustment(payload.adjustmentId),
     onSuccess: (res, variables) => {
-
       console.log(variables);
       console.log(res);
       const resData = res.data || {};
-      
+
       toast.success(res.message || "Adjustment removed");
 
       queryClient.invalidateQueries({
@@ -50,6 +53,10 @@ export const useDeleteOpeningAdjustment = () => {
           resData.entityType,
           resData.entityId,
         ],
+      });
+
+         queryClient.invalidateQueries({
+        queryKey: ["reports"],
       });
     },
     onError: (error) => {

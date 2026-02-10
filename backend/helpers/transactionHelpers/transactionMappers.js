@@ -18,6 +18,18 @@ export const transactionTypeToModelName = (transactionType) => {
 
   return mapping[transactionType] || transactionType;
 };
+export const transactionModelToType = (transactionModel) => {
+  const mapping = {
+    Sale: "sale",
+    Purchase: "purchase",
+    SalesReturn: "sales_return",
+    PurchaseReturn: "purchase_return",
+    Receipt: "receipt",
+    Payment: "payment",
+  };
+
+  return mapping[transactionModel] || transactionModel;
+};
 
 // This function now returns the actual Mongoose model
 export const getTransactionModel = (transactionType) => {
