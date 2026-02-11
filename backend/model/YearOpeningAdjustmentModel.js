@@ -2,6 +2,16 @@ import mongoose from "mongoose";
 
 const yearOpeningAdjustmentSchema = new mongoose.Schema(
   {
+    company: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Company",
+      required: [true, "Company is required"],
+    },
+    branch: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+      required: [true, "Branch is required"],
+    },
     // Entity Reference
     entityId: {
       type: String,

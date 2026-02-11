@@ -132,7 +132,6 @@ const OpeningBalanceService = {
         );
 
         console.log("voucherType", voucherType);
-        
 
         // Determine sign based on voucher type
         const crVouchers = ["purchase", "sales_return", "receipt"];
@@ -140,10 +139,9 @@ const OpeningBalanceService = {
         let signedDelta = adj.amountDelta || 0;
 
         console.log("signedDelta", signedDelta);
-        
 
         if (crVouchers.includes(voucherType)) {
-          signedDelta = -(signedDelta);
+          signedDelta = -signedDelta;
         } else {
           signedDelta = signedDelta;
         }
@@ -364,6 +362,8 @@ const OpeningBalanceService = {
         adjustment.adjustmentAmount = adjustmentAmount;
         adjustment.reason = reason;
         adjustment.updatedBy = userId;
+        adjustment.company = companyId;
+        adjustment.branch = branchId;
         // adjustment.isCancelled = false;
         await adjustment.save({ session });
       } else {
@@ -373,6 +373,8 @@ const OpeningBalanceService = {
           financialYear,
           adjustmentAmount,
           reason,
+          company: companyId,
+          branch: branchId,
           createdBy: userId,
         });
         await adjustment.save({ session });

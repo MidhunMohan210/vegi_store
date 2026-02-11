@@ -3,11 +3,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { openingBalanceService } from "@/api/services/openingBalance.service";
 import { toast } from "sonner";
 
-export const useSaveOpeningAdjustment = () => {
+export const useSaveOpeningAdjustment = (companyId, branchId) => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (payload) => openingBalanceService.saveAdjustment(payload),
+    mutationFn: (payload) =>
+      openingBalanceService.saveAdjustment(payload, companyId, branchId),
     onSuccess: (res, variables) => {
       toast.success(res.message || "Adjustment saved successfully");
 
@@ -55,7 +56,7 @@ export const useDeleteOpeningAdjustment = () => {
         ],
       });
 
-         queryClient.invalidateQueries({
+      queryClient.invalidateQueries({
         queryKey: ["reports"],
       });
     },

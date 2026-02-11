@@ -77,7 +77,7 @@ const OpeningBalanceManagement = ({
   const totalPages = pagination.totalPages;
 
   const { mutate: saveAdjustment, isPending: isSaving } =
-    useSaveOpeningAdjustment();
+    useSaveOpeningAdjustment(companyId, branchId);
   const { mutate: deleteAdjustment, isPending: isDeleting } =
     useDeleteOpeningAdjustment();
 

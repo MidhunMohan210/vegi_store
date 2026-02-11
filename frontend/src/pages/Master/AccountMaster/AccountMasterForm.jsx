@@ -3,11 +3,12 @@ import React, { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, UserPlus, Pencil, AlertCircle, FileBarChart } from "lucide-react";
+import { Loader2, UserPlus, Pencil, AlertCircle, FileBarChart, Edit2 } from "lucide-react";
 import BranchSelector from "@/components/BranchSelector";
 import { accountMasterMutations } from "@/hooks/mutations/accountMaster.mutations";
 import { priceLevelQueries } from "@/hooks/queries/priceLevel.queries";
 import OpeningBalanceManagement from "@/components/modals/OpeningBalanceManagement";
+import OpeningBalanceEditDialog from "@/components/modals/OpeningBalanceEditDialog";
 
 
 const AccountMasterForm = ({
@@ -19,6 +20,7 @@ const AccountMasterForm = ({
 }) => {
   const queryClient = useQueryClient();
   const [showOpeningBalanceModal, setShowOpeningBalanceModal] = useState(false);
+  const [showEditBalanceDialog, setShowEditBalanceDialog] = useState(false);
 
 
   const {
@@ -324,13 +326,25 @@ const AccountMasterForm = ({
                <div className="grid grid-cols-3 gap-4">
                   <div className="col-span-2">
                     <InputLabel label="Opening Balance" />
-                    <input
-                      {...register("openingBalance", { valueAsNumber: true, min: 0 })}
-                      type="number"
-                      className={`${inputClass} font-mono`}
-                      placeholder="0.00"
-                      disabled={isLoading || editingId}
-                    />
+                    <div className="relative">
+                      <input
+                        {...register("openingBalance", { valueAsNumber: true, min: 0 })}
+                        type="number"
+                        className={`${inputClass} font-mono pr-10`}
+                        placeholder="0.00"
+                        disabled={isLoading || editingId}
+                      />
+                      {editingId && (
+                        <button
+                          type="button"
+                          onClick={() => setShowEditBalanceDialog(true)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md hover:bg-slate-100 text-slate-500 hover:text-blue-600 transition-colors"
+                          title="Edit Master Opening Balance"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                     {errors.openingBalance && <ErrorMessage message={errors.openingBalance.message} />}
                   </div>
                   <div>
@@ -414,6 +428,26 @@ const AccountMasterForm = ({
         entityId={editingId}
         entityName={accountName || "Account"}
         
+      />
+
+      {/* Edit Master Opening Balance Dialog */}
+      <OpeningBalanceEditDialog
+        open={showEditBalanceDialog}
+        onOpenChange={setShowEditBalanceDialog}
+        currentBalance={watch("openingBalance") || 0}
+        currentBalanceType={watch("openingBalanceType") || "dr"}
+        accountName={accountName || "Account"}
+        entityType="party"
+        entityId={editingId}
+        companyId={companyId}
+        branchId={branchId}
+        onUpdated={(data) => {
+          // Handle the updated values (dummy for now)
+          toast.success(
+            `Master balance updated to ${data.openingBalanceType === 'dr' ? 'Dr' : 'Cr'} ₹${data.newOpeningBalance.toLocaleString('en-IN')}`
+          );
+          console.log("Updated opening balance:", data);
+        }}
       />
     </>
   );

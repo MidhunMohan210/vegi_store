@@ -30,5 +30,29 @@ export const openingBalanceQueries = {
       refetchOnWindowFocus: false,
       
     }),
+
+  // Get recalculation impact summary
+  recalculationImpact: (entityType, entityId, companyId, branchId) =>
+    queryOptions({
+      queryKey: [
+        ...openingBalanceQueries.all(),
+        "recalculationImpact",
+        entityType,
+        entityId,
+        companyId,
+        branchId,
+      ],
+      queryFn: () =>
+        openingBalanceService.getRecalculationImpact(
+          entityType,
+          entityId,
+          companyId,
+          branchId
+        ),
+      enabled: !!entityType && !!entityId && !!companyId,
+      staleTime: 60 * 1000, // 1 minute
+      retry: 2, // Retry failed requests twice
+      refetchOnWindowFocus: false,
+    }),
 };
 
