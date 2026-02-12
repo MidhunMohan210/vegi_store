@@ -5,6 +5,7 @@ import {
   saveAdjustment,
   cancelAdjustment,
   getOpeningBalanceRecalculationImpact,
+  updateAccountOpeningBalance,
 } from "../../controller/openingBalanceController.js/openingBalanceController.js";
 import { authMiddleware } from "../../middlewares/authMiddleware.js";
 
@@ -18,7 +19,9 @@ router.post("/adjust", saveAdjustment);
 router.delete("/adjust/:adjustmentId", cancelAdjustment);
 router.get(
   "/:entityType/:entityId/recalculation-impact",
-  getOpeningBalanceRecalculationImpact
+  getOpeningBalanceRecalculationImpact,
 );
+
+router.put("/update", updateAccountOpeningBalance);
 
 export default router;

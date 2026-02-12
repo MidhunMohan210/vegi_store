@@ -267,8 +267,7 @@ export const handleAccountTypeChangeOnEdit = async (
   const hasPaidAmount =
     (original.paidAmount || 0) > 0 || (updated.paidAmount || 0) > 0;
 
-    console.log("hasPaidAmount:", hasPaidAmount);
-    
+  console.log("hasPaidAmount:", hasPaidAmount);
 
   if (
     hasPaidAmount &&
@@ -864,7 +863,7 @@ const handleCreateCashBankLedgerOnEdit = async (
  * Helper: Calculate total Receipts and Payments for an outstanding
  * from active settlements.
  */
-const calculateReceiptPaymentTotals = async (outstandingId, session) => {
+export const calculateReceiptPaymentTotals = async (outstandingId, session) => {
   const settlements = await OutstandingSettlement.find({
     outstanding: outstandingId,
     settlementStatus: "active",

@@ -26,7 +26,7 @@ const OutstandingSchema = new mongoose.Schema(
     accountType: {
       type: String,
       enum: {
-        values: ["customer", "supplier","bank","cash"],
+        values: ["customer", "supplier", "bank", "cash"],
         message: "Account type must be either customer or supplier",
       },
       required: [true, "Account type is required"],
@@ -35,7 +35,16 @@ const OutstandingSchema = new mongoose.Schema(
     transactionModel: {
       type: String,
       required: [true, "Transaction model is required"],
-      enum: ["Sale", "Purchase", "SalesReturn", "PurchaseReturn", "OpeningBalance", "Receipt", "Payment"],
+      enum: [
+        "Sale",
+        "Purchase",
+        "SalesReturn",
+        "PurchaseReturn",
+        "OpeningBalance",
+        "Receipt",
+        "Payment",
+        "YearOpeningAdjustment",
+      ],
     },
     sourceTransaction: {
       type: mongoose.Schema.Types.ObjectId,
@@ -56,6 +65,7 @@ const OutstandingSchema = new mongoose.Schema(
           "opening_balance",
           "advance_receipt",
           "advance_payment",
+          "opening_adjustment",
         ],
         message: "Invalid transaction type",
       },
@@ -132,7 +142,7 @@ const OutstandingSchema = new mongoose.Schema(
     timestamps: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
-  }
+  },
 );
 
 // Indexes
@@ -196,10 +206,10 @@ OutstandingSchema.methods.updatePayment = function (paymentAmount) {
     this.status = "partial";
   }
 
-  // Check if overdue
-  if (this.isOverdue && this.status !== "paid") {
-    this.status = "overdue";
-  }
+  // // Check if overdue
+  // if (this.isOverdue && this.status !== "paid") {
+  //   this.status = "overdue";
+  // }
 
   return this.save();
 };
@@ -230,14 +240,14 @@ OutstandingSchema.methods.markAsPaid = function () {
   return this.save();
 };
 
-// Instance method to check if overdue
-OutstandingSchema.methods.checkOverdue = function () {
-  const isOverdue = new Date() > this.dueDate && this.closingBalanceAmount > 0;
-  if (isOverdue && this.status !== "overdue") {
-    this.status = "overdue";
-  }
-  return isOverdue;
-};
+// // Instance method to check if overdue
+// OutstandingSchema.methods.checkOverdue = function () {
+//   const isOverdue = new Date() > this.dueDate && this.closingBalanceAmount > 0;
+//   if (isOverdue && this.status !== "overdue") {
+//     this.status = "overdue";
+//   }
+//   return isOverdue;
+// };
 
 // Instance method to calculate aging days
 OutstandingSchema.methods.calculateAgingDays = function () {
@@ -277,7 +287,7 @@ OutstandingSchema.statics.getPayables = function (companyId, filters = {}) {
 // Get overdue items
 OutstandingSchema.statics.getOverdueItems = function (
   companyId,
-  outstandingType = null
+  outstandingType = null,
 ) {
   const matchConditions = {
     company: companyId,
@@ -329,7 +339,7 @@ OutstandingSchema.statics.findPendingByAccount = async function (accountId) {
 // Static method to get aging report
 OutstandingSchema.statics.getAgingReport = async function (
   accountId,
-  asOfDate = new Date()
+  asOfDate = new Date(),
 ) {
   const outstandingRecords = await this.find({
     account: accountId,
@@ -346,7 +356,7 @@ OutstandingSchema.statics.getAgingReport = async function (
 
   outstandingRecords.forEach((record) => {
     const agingDays = Math.ceil(
-      (asOfDate - record.dueDate) / (1000 * 60 * 60 * 24)
+      (asOfDate - record.dueDate) / (1000 * 60 * 60 * 24),
     );
     const amount = record.closingBalanceAmount;
 
@@ -369,7 +379,7 @@ OutstandingSchema.statics.getAgingReport = async function (
 // Static method to get total outstanding
 OutstandingSchema.statics.getTotalOutstanding = async function (
   accountId,
-  outstandingType
+  outstandingType,
 ) {
   const result = await this.aggregate([
     {
@@ -408,23 +418,22 @@ OutstandingSchema.pre("save", function (next) {
   }
 
   // Check for overdue status
-  if (
-    this.closingBalanceAmount > 0 &&
-    new Date() > this.dueDate &&
-    this.status !== "disputed" &&
-    this.status !== "written_off"
-  ) {
-    this.status = "overdue";
-  }
+  // if (
+  //   this.closingBalanceAmount > 0 &&
+  //   new Date() > this.dueDate &&
+  //   this.status !== "disputed" &&
+  //   this.status !== "written_off"
+  // ) {
+  //   this.status = "overdue";
+  // }
 
   /// if outstandingType is cr closingBalanceAmount should be negative
-if (this.outstandingType === "cr") {
-  this.closingBalanceAmount = -Math.abs(this.closingBalanceAmount);
-}
-if (this.outstandingType === "dr") {
-  this.closingBalanceAmount = Math.abs(this.closingBalanceAmount);
-}
-
+  if (this.outstandingType === "cr") {
+    this.closingBalanceAmount = -Math.abs(this.closingBalanceAmount);
+  }
+  if (this.outstandingType === "dr") {
+    this.closingBalanceAmount = Math.abs(this.closingBalanceAmount);
+  }
 
   next();
 });

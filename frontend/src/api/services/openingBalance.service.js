@@ -27,6 +27,21 @@ export const openingBalanceService = {
     }
   },
 
+  // Update Master Opening Balance (triggers recalculation)
+  updateMasterOpeningBalance: async (payload, companyId, branchId) => {
+    try {
+      const res = await api.put("/opening-balance/update", payload, {
+        params: { companyId, branchId },
+      });
+      return res.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        throw new Error(error.response?.data?.message || error.message);
+      }
+      throw new Error("Error updating opening balance");
+    }
+  },
+
   // Save/Update Adjustment
   saveAdjustment: async (payload, companyId, branchId) => {
     try {

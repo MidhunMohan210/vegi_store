@@ -1,9 +1,10 @@
 // components/modals/OpeningBalanceEditDialog.jsx
-import React, { useState, useEffect } from "react";
+import React, { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { AlertTriangle, Loader2, Calculator, TrendingUp, RefreshCw } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { openingBalanceQueries } from "@/hooks/queries/openingBalance.queries";
+import { useUpdateMasterOpeningBalance } from "@/hooks/mutations/openingBalance.mutation";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { toast } from "sonner";
 
 const OpeningBalanceEditDialog = ({
   open,
@@ -25,8 +27,6 @@ const OpeningBalanceEditDialog = ({
   branchId,
   onUpdated,
 }) => {
-  const [isRecalculating, setIsRecalculating] = useState(false);
-
   // Fetch recalculation impact data
   const {
     data: impactData,
@@ -43,6 +43,9 @@ const OpeningBalanceEditDialog = ({
     ),
     enabled: open && !!entityId && !!companyId,
   });
+
+  // Update master opening balance mutation
+  const updateOpeningBalanceMutation = useUpdateMasterOpeningBalance(companyId, branchId);
 
   const {
     register,
@@ -71,23 +74,36 @@ const OpeningBalanceEditDialog = ({
   const newBalanceType = watch("openingBalanceType");
 
   const onSubmit = (formData) => {
-    setIsRecalculating(true);
 
-    // Simulate loading for 1-2 seconds
-    setTimeout(() => {
-      setIsRecalculating(false);
-      
-      // Call the callback with new values
-      if (onUpdated) {
-        onUpdated({
-          newOpeningBalance: formData.newOpeningBalance,
-          openingBalanceType: formData.openingBalanceType,
-        });
-      }
+    /// if new balance is same as current balance then return
+    if (newBalance === currentBalance && newBalanceType === currentBalanceType) {
+      toast.error("No changes detected. Please make a new adjustment.");
+      return;
+    }
 
-      // Close the dialog
-      onOpenChange(false);
-    }, 1500); // 1.5 seconds
+    // Prepare payload for API
+    const payload = {
+      entityType,
+      entityId,
+      newOpeningBalance: formData.newOpeningBalance,
+      openingBalanceType: formData.openingBalanceType,
+    };
+
+    // Call the mutation
+    updateOpeningBalanceMutation.mutate(payload, {
+      onSuccess: () => {
+        // Call the callback with new values
+        if (onUpdated) {
+          onUpdated({
+            newOpeningBalance: formData.newOpeningBalance,
+            openingBalanceType: formData.openingBalanceType,
+          });
+        }
+
+        // Close the dialog
+        onOpenChange(false);
+      },
+    });
   };
 
   const inputClass =
@@ -246,7 +262,7 @@ const OpeningBalanceEditDialog = ({
                 step="0.01"
                 className={`${inputClass} font-mono`}
                 placeholder="0.00"
-                disabled={isRecalculating}
+                disabled={updateOpeningBalanceMutation.isPending}
               />
               {errors.newOpeningBalance && (
                 <p className="text-xs text-red-500 font-medium">
@@ -264,7 +280,7 @@ const OpeningBalanceEditDialog = ({
                   required: "Balance type is required",
                 })}
                 className={inputClass}
-                disabled={isRecalculating}
+                disabled={updateOpeningBalanceMutation.isPending}
               >
                 <option value="dr">Debit (Receivable)</option>
                 <option value="cr">Credit (Payable)</option>
@@ -309,17 +325,17 @@ const OpeningBalanceEditDialog = ({
             <button
               type="button"
               onClick={() => onOpenChange(false)}
-              disabled={isRecalculating}
+              disabled={updateOpeningBalanceMutation.isPending}
               className="px-4 py-2.5 text-xs font-semibold text-slate-600 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isRecalculating}
+              disabled={updateOpeningBalanceMutation.isPending}
               className="px-4 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2 min-w-[160px] justify-center"
             >
-              {isRecalculating ? (
+              {updateOpeningBalanceMutation.isPending ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
                   Recalculating...

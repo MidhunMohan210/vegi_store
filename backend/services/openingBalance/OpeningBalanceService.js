@@ -3,11 +3,14 @@ import mongoose from "mongoose";
 import YearOpeningAdjustment from "../../model/YearOpeningAdjustmentModel.js";
 import AccountMonthlyBalance from "../../model/AccountMonthlyBalanceModel.js";
 import CompanySettings from "../../model/CompanySettings.model.js";
-import AccountMaster from "../../model/masters/AccountMasterModel.js";
 import AdjustmentEntryModel from "../../model/AdjustmentEntryModel.js";
 import Company from "../../model/masters/CompanyModel.js";
 import { getFinancialYearForDate } from "../../helpers/CommonTransactionHelper/openingBalanceHelper.js";
 import { transactionModelToType } from "../../helpers/transactionHelpers/transactionMappers.js";
+import AccountMaster from "../../model/masters/AccountMasterModel.js";
+import Outstanding from "../../model/OutstandingModel.js";
+import { nanoid } from "nanoid";
+import { calculateReceiptPaymentTotals } from "../../helpers/transactionHelpers/outstandingService.js";
 
 const PAGE_SIZE = 5;
 
@@ -350,7 +353,6 @@ const OpeningBalanceService = {
     session.startTransaction();
 
     try {
-      // 1. Upsert Adjustment Record
       let adjustment = await YearOpeningAdjustment.findOne({
         entityId,
         entityType,
@@ -359,14 +361,23 @@ const OpeningBalanceService = {
       }).session(session);
 
       if (adjustment) {
+        console.log("adjustment already exists");
+
+        // keep existing adjustmentNumber if already present
         adjustment.adjustmentAmount = adjustmentAmount;
         adjustment.reason = reason;
         adjustment.updatedBy = userId;
         adjustment.company = companyId;
         adjustment.branch = branchId;
-        // adjustment.isCancelled = false;
         await adjustment.save({ session });
+
+        await OpeningBalanceService.updateOutstandingForAdjustment({
+          adjustment,
+          session,
+        });
       } else {
+        const adjustmentNumber = nanoid(10); // or whatever length you want [web:6][web:12]
+
         adjustment = new YearOpeningAdjustment({
           entityId,
           entityType,
@@ -376,13 +387,20 @@ const OpeningBalanceService = {
           company: companyId,
           branch: branchId,
           createdBy: userId,
+          adjustmentNumber,
         });
         await adjustment.save({ session });
+
+        // 2. Create / upsert Outstanding for this adjustment
+        await OpeningBalanceService.createOutstandingForAdjustment({
+          adjustment,
+          userId,
+          session,
+        });
       }
 
-      // 2. Trigger Recalculation
-      const startMonth = 4; // Should come from settings
-      const startYear = parseInt(financialYear);
+      const startMonth = 4;
+      const startYear = parseInt(financialYear, 10);
 
       await OpeningBalanceService.recalculateLedger(
         entityId,
@@ -436,6 +454,14 @@ const OpeningBalanceService = {
       adjustment.isCancelled = true;
       await adjustment.save({ session });
 
+      adjustment.adjustmentAmount = 0;
+
+      /// update outstanding
+      await OpeningBalanceService.updateOutstandingForAdjustment({
+        adjustment,
+        session,
+      });
+
       // Optionally, trigger recalculation if needed
       // await OpeningBalanceService.recalculateLedger(...);
 
@@ -447,6 +473,95 @@ const OpeningBalanceService = {
     } finally {
       session.endSession();
     }
+  },
+
+  createOutstandingForAdjustment: async ({ adjustment, userId, session }) => {
+    const {
+      company,
+      branch,
+      entityId,
+      adjustmentAmount,
+      adjustmentNumber,
+      _id: adjustmentId,
+      createdAt,
+    } = adjustment;
+
+    // 1. Get account details from AccountMaster
+    const accountDoc = await AccountMaster.findById(entityId)
+      .select("_id accountName accountType") // adjust field names if different
+      .session(session);
+
+    if (!accountDoc) {
+      throw new Error("Account not found for adjustment");
+    }
+
+    const outstandingType = adjustmentAmount < 0 ? "cr" : "dr";
+
+    const totalAmount = Math.abs(adjustmentAmount); // if you store signed amounts
+    const transactionDate = createdAt || new Date();
+    const dueDate = new Date();
+
+    const outstanding = new Outstanding({
+      company,
+      branch,
+      account: accountDoc._id,
+      accountName: accountDoc.accountName, // or accountDoc.accountName
+      accountType: accountDoc.accountType, // must match enum in schema
+
+      transactionModel: "YearOpeningAdjustment",
+      sourceTransaction: adjustmentId,
+      transactionType: "opening_adjustment",
+      transactionNumber: adjustmentNumber,
+
+      transactionDate,
+      outstandingType,
+
+      totalAmount,
+      paidAmount: 0,
+      closingBalanceAmount: totalAmount,
+      dueDate,
+      status: "pending",
+
+      notes: `Year opening adjustment for FY ${adjustment.financialYear}`,
+      createdBy: userId,
+      lastModifiedBy: userId,
+    });
+
+    await outstanding.save({ session });
+  },
+
+  updateOutstandingForAdjustment: async ({ adjustment, session }) => {
+    const { _id: adjustmentId, adjustmentAmount } = adjustment;
+
+    console.log("outstanding update");
+
+    const outstanding = await Outstanding.findOne({
+      transactionModel: "YearOpeningAdjustment",
+      sourceTransaction: adjustmentId,
+    }).session(session); // important: query using the same session
+
+    if (!outstanding) throw new Error("Outstanding not found for adjustment");
+
+    const { totalReceipts, totalPayments } =
+      await calculateReceiptPaymentTotals(outstanding._id, session);
+
+    let closingBalance;
+    if (outstanding.outstandingType === "dr") {
+      closingBalance = adjustmentAmount - totalReceipts + totalPayments;
+    } else {
+      closingBalance = -(adjustmentAmount - totalPayments + totalReceipts);
+    }
+
+    outstanding.totalAmount = Math.abs(adjustmentAmount);
+    outstanding.closingBalanceAmount = closingBalance;
+    outstanding.outstandingType = closingBalance < 0 ? "cr" : "dr";
+
+    console.log(outstanding);
+
+    // outstanding.markModified("closingBalanceAmount"); // defensive
+    // outstanding.markModified("outstandingType");
+
+    await outstanding.save({ session });
   },
 };
 

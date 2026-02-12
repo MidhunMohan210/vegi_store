@@ -34,6 +34,13 @@ const yearOpeningAdjustmentSchema = new mongoose.Schema(
       trim: true,
     },
 
+    adjustmentNumber: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true,
+    },
+
     // Adjustment Values
     adjustmentAmount: {
       type: Number,

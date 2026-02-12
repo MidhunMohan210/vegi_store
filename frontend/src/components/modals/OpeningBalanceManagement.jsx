@@ -60,7 +60,7 @@ const OpeningBalanceManagement = ({
     data: responseData,
     isLoading,
     isError,
-    refetch
+    refetch,
   } = useQuery(
     openingBalanceQueries.list(entityType, entityId, companyId, branchId, page),
   );
@@ -336,7 +336,7 @@ const OpeningBalanceManagement = ({
                           </td>
                           <td className="py-3 px-4">
                             <div className="flex items-center justify-center gap-2">
-                              {!year.isLocked ? (
+                              {year.source !== "master" ? (
                                 <Button
                                   size="sm"
                                   variant="outline"
