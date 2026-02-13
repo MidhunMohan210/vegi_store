@@ -1,11 +1,21 @@
-// hooks/queries/openingBalance.queries.ts
 import { queryOptions } from "@tanstack/react-query";
 import { openingBalanceService } from "@/api/services/openingBalance.service";
 
-// hooks/queries/openingBalance.queries.ts
+/**
+ * ============================================
+ * OPENING BALANCE QUERIES
+ * ============================================
+ * 
+ * Purpose: React Query configurations for opening balance operations
+ * 
+ * ============================================
+ */
 export const openingBalanceQueries = {
   all: () => ["openingBalance"],
 
+  /**
+   * Get year-wise opening balances list
+   */
   list: (entityType, entityId, companyId, branchId, page) =>
     queryOptions({
       queryKey: [
@@ -28,31 +38,9 @@ export const openingBalanceQueries = {
       enabled: !!entityId && !!companyId && !!branchId,
       staleTime: 1000 * 60 * 5,
       refetchOnWindowFocus: false,
-      
     }),
 
-  // Get recalculation impact summary
-  recalculationImpact: (entityType, entityId, companyId, branchId) =>
-    queryOptions({
-      queryKey: [
-        ...openingBalanceQueries.all(),
-        "recalculationImpact",
-        entityType,
-        entityId,
-        companyId,
-        branchId,
-      ],
-      queryFn: () =>
-        openingBalanceService.getRecalculationImpact(
-          entityType,
-          entityId,
-          companyId,
-          branchId
-        ),
-      enabled: !!entityType && !!entityId && !!companyId,
-      staleTime: 60 * 1000, // 1 minute
-      retry: 2, // Retry failed requests twice
-      refetchOnWindowFocus: false,
-    }),
+  // NOTE: recalculationImpact query removed
+  // Impact analysis is now handled directly in the mutation
+  // using openingBalanceService.analyzeImpact()
 };
-

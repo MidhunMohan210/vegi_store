@@ -66,20 +66,20 @@ export const AccountMonthlyBalanceSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
-    needsRecalculation:{
+    needsRecalculation: {
       type: Boolean,
       default: false,
-    }
+    },
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // Compound index for unique constraint and faster queries
 AccountMonthlyBalanceSchema.index(
   { account: 1, periodKey: 1 },
-  { unique: true }
+  { unique: true },
 );
 AccountMonthlyBalanceSchema.index({ company: 1, branch: 1, periodKey: 1 });
 AccountMonthlyBalanceSchema.index({ needsRecalculation: 1 });
@@ -92,35 +92,47 @@ AccountMonthlyBalanceSchema.statics.getOpeningBalance = async function (
   companyId,
   year,
   month,
-  session
+  session,
 ) {
-  // Check if previous month exists
-  let prevYear = year;
-  let prevMonth = month - 1;
+  // console.log(`\n[Get Opening Balance] Starting search...`);
+  // console.log(`[Get Opening Balance] Account: ${accountId}`);
+  // console.log(`[Get Opening Balance] Branch: ${branchId}`);
+  // console.log(`[Get Opening Balance] Target: ${month}/${year}`);
 
-  if (prevMonth === 0) {
-    prevMonth = 12;
-    prevYear = year - 1;
-  }
+  // ========================================
+  // STEP 1: FIND MOST RECENT PREVIOUS MONTHLY BALANCE
+  // ========================================
+  // console.log(`[Get Opening Balance] Searching for most recent monthly balance before ${month}/${year}...`);
 
-  // Try to get previous month's closing balance
+  // Find the most recent monthly balance before the target month/year
   const previousMonth = await this.findOne({
     company: companyId,
     branch: branchId,
     account: accountId,
-    year: prevYear,
-    month: prevMonth,
+    $or: [
+      // Previous years (any month)
+      { year: { $lt: year } },
+      // Same year but previous months
+      { year: year, month: { $lt: month } },
+    ],
   })
-    .select("closingBalance")
-    .session(session);
+    .select("closingBalance month year")
+    .sort({ year: -1, month: -1 }) // Sort by year DESC, month DESC
+    .session(session)
+    .lean();
 
   if (previousMonth) {
-    // Previous month exists - use its closing balance
+    // console.log(`[Get Opening Balance] ✅ Found closing balance at ${previousMonth.month}/${previousMonth.year}: ${previousMonth.closingBalance}`);
     return previousMonth.closingBalance;
   }
 
-  // No previous month - this is the first month
-  // Get opening balance from AccountMaster
+  // console.log(`[Get Opening Balance] ⚠️ No previous monthly balance found`);
+
+  // ========================================
+  // STEP 2: NO PREVIOUS MONTH FOUND - GET FROM ACCOUNT MASTER
+  // ========================================
+  // console.log(`[Get Opening Balance] Fetching opening balance from AccountMaster...`);
+
   const accountMaster = await mongoose
     .model("AccountMaster")
     .findOne({
@@ -129,15 +141,20 @@ AccountMonthlyBalanceSchema.statics.getOpeningBalance = async function (
       company: companyId,
     })
     .select("openingBalance openingBalanceType")
-    .session(session);
+    .session(session)
+    .lean();
 
   if (!accountMaster) {
+    console.log(`[Get Opening Balance] ❌ Account master not found, returning 0`);
     return 0;
   }
 
-  // Return opening balance
-  return accountMaster.openingBalance || 0;
+  const masterOpeningBalance = accountMaster.openingBalance || 0;
+  // console.log(`[Get Opening Balance] ✅ Using master opening balance: ${masterOpeningBalance} (${accountMaster.openingBalanceType})`);
+
+  return masterOpeningBalance;
 };
+
 
 // Method to calculate and update closing balance
 AccountMonthlyBalanceSchema.methods.calculateClosingBalance = function () {

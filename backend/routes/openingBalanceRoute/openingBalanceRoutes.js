@@ -5,9 +5,9 @@ import {
   saveAdjustment,
   cancelAdjustment,
   getOpeningBalanceRecalculationImpact,
-  updateAccountOpeningBalance,
-} from "../../controller/openingBalanceController.js/openingBalanceController.js";
+} from "../../controller/openingBalanceController.js/openingBalanceAdjustmentController.js";
 import { authMiddleware } from "../../middlewares/authMiddleware.js";
+import { analyzeOpeningBalanceImpactController, updateOpeningBalanceController } from "../../controller/openingBalanceController.js/openingBalanceController.js";
 
 const router = express.Router();
 
@@ -22,6 +22,12 @@ router.get(
   getOpeningBalanceRecalculationImpact,
 );
 
-router.put("/update", updateAccountOpeningBalance);
+router.post('/analyze', analyzeOpeningBalanceImpactController);
+router.post('/update', updateOpeningBalanceController);
+
+
+
+
+// router.put("/update", updateAccountOpeningBalance);
 
 export default router;

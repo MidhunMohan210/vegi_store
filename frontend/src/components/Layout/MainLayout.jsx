@@ -5,6 +5,7 @@ import RouteChangeLoader from "../loaders/RouteChangeLoader";
 import { useSelector } from "react-redux";
 import NoCompanyDataErrorPage from "../errors/NoCompanyDataErrorPage";
 import RevaluationLoaderOverlay from "../Revaluation/RevaluationLoaderOverlay";
+import RecalculationConfirmationDialog from "../modals/RecalculationConfirmationDialog";
 
 function MainLayout() {
   const isLoading = useSelector((state) => state.loader.isLoading);
@@ -54,6 +55,7 @@ function MainLayout() {
 
         {/* Global revaluation loader */}
         <RevaluationLoaderOverlay />
+          <RecalculationConfirmationDialog />
       </main>
     </div>
   );

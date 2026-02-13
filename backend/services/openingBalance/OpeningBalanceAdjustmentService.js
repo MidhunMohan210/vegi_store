@@ -224,6 +224,11 @@ const OpeningBalanceService = {
       for (const y of allFYsForChain) {
         const fyStr = y.toString();
         const yearData = fyMap.get(fyStr);
+
+        console.log("yearData", yearData);
+        console.log("fyMap", fyMap);
+        console.log("fyStr", fyStr);
+        
         const adjustment = adjustments.find((a) => a.financialYear === fyStr);
         const pendingDelta = pendingByFY.get(fyStr) || 0;
 

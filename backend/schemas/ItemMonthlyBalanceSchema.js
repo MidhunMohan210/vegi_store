@@ -121,48 +121,64 @@ ItemMonthlyBalanceSchema.statics.getOpeningStock = async function (
   month,
   session
 ) {
-  // Check if previous month exists
-  let prevYear = year;
-  let prevMonth = month - 1;
+  console.log(`\n[Get Opening Stock] Starting search...`);
+  console.log(`[Get Opening Stock] Item: ${itemId}`);
+  console.log(`[Get Opening Stock] Branch: ${branchId}`);
+  console.log(`[Get Opening Stock] Target: ${month}/${year}`);
 
-  if (prevMonth === 0) {
-    prevMonth = 12;
-    prevYear = year - 1;
-  }
+  // ========================================
+  // STEP 1: FIND MOST RECENT PREVIOUS MONTHLY STOCK
+  // ========================================
+  console.log(`[Get Opening Stock] Searching for most recent monthly stock before ${month}/${year}...`);
 
-  // Try to get previous month's closing stock
+  // Find the most recent monthly stock before the target month/year
   const previousMonth = await this.findOne({
     company: companyId,
     branch: branchId,
     item: itemId,
-    year: prevYear,
-    month: prevMonth,
+    $or: [
+      // Previous years (any month)
+      { year: { $lt: year } },
+      // Same year but previous months
+      { year: year, month: { $lt: month } },
+    ],
   })
-    .select("closingStock")
-    .session(session);
+    .select("closingStock month year")
+    .sort({ year: -1, month: -1 }) // Sort by year DESC, month DESC
+    .session(session)
+    .lean();
 
   if (previousMonth) {
-    // Previous month exists - use its closing stock as opening stock
+    console.log(`[Get Opening Stock] ✅ Found closing stock at ${previousMonth.month}/${previousMonth.year}: ${previousMonth.closingStock}`);
     return previousMonth.closingStock;
   }
 
-  // No previous month - this is the first month
-  // Get opening stock from ItemMaster
+  console.log(`[Get Opening Stock] ⚠️ No previous monthly stock found`);
+
+  // ========================================
+  // STEP 2: NO PREVIOUS MONTH FOUND - GET FROM ITEM MASTER
+  // ========================================
+  console.log(`[Get Opening Stock] Fetching opening stock from ItemMaster...`);
+
   const itemMaster = await mongoose
     .model("ItemMaster")
     .findById(itemId)
     .select("stock")
-    .session(session);
+    .session(session)
+    .lean();
 
   if (!itemMaster) {
+    console.log(`[Get Opening Stock] ❌ Item master not found, returning 0`);
     return 0;
   }
 
   // Find the branch stock entry
-  const branchStock = itemMaster.stock.find(
+  const branchStock = itemMaster.stock?.find(
     (s) => s.branch.toString() === branchId.toString()
   );
 
-  // Return opening stock from ItemMaster, or 0 if not found
-  return branchStock?.openingStock || 0;
+  const masterOpeningStock = branchStock?.openingStock || 0;
+  console.log(`[Get Opening Stock] ✅ Using master opening stock: ${masterOpeningStock}`);
+
+  return masterOpeningStock;
 };

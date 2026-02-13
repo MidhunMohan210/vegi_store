@@ -27,22 +27,22 @@ const OpeningBalanceEditDialog = ({
   branchId,
   onUpdated,
 }) => {
-  // Fetch recalculation impact data
-  const {
-    data: impactData,
-    isLoading: isLoadingImpact,
-    isError: isErrorImpact,
-    error: impactError,
-    refetch: refetchImpact,
-  } = useQuery({
-    ...openingBalanceQueries.recalculationImpact(
-      entityType,
-      entityId,
-      companyId,
-      branchId
-    ),
-    enabled: open && !!entityId && !!companyId,
-  });
+  // // Fetch recalculation impact data
+  // const {
+  //   data: impactData,
+  //   isLoading: isLoadingImpact,
+  //   isError: isErrorImpact,
+  //   error: impactError,
+  //   refetch: refetchImpact,
+  // } = useQuery({
+  //   ...openingBalanceQueries.recalculationImpact(
+  //     entityType,
+  //     entityId,
+  //     companyId,
+  //     branchId
+  //   ),
+  //   enabled: open && !!entityId && !!companyId,
+  // });
 
   // Update master opening balance mutation
   const updateOpeningBalanceMutation = useUpdateMasterOpeningBalance(companyId, branchId);
@@ -139,79 +139,6 @@ const OpeningBalanceEditDialog = ({
               </div>
             </div>
 
-            {/* Impact Analysis Section */}
-            <div className="bg-white/60 rounded-md p-3 space-y-2">
-              <div className="flex items-center gap-2 text-xs text-amber-900">
-                <TrendingUp className="w-3.5 h-3.5" />
-                <span className="font-semibold">Impact Analysis</span>
-              </div>
-
-              {/* Loading State */}
-              {isLoadingImpact && (
-                <div className="flex items-center justify-center py-4 gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
-                  <span className="text-xs text-amber-700">Loading impact data...</span>
-                </div>
-              )}
-
-              {/* Error State */}
-              {isErrorImpact && (
-                <div className="space-y-2">
-                  <p className="text-xs text-red-600">
-                    Failed to load impact data: {impactError?.message || "Unknown error"}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => refetchImpact()}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 hover:text-amber-900 transition-colors"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    Retry
-                  </button>
-                </div>
-              )}
-
-              {/* Success State - Show Impact Data */}
-              {!isLoadingImpact && !isErrorImpact && impactData && (
-                <>
-                  {/* Display up to 3 latest years */}
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    {impactData.years
-                      ?.slice(0, 3)
-                      .map((yearData) => (
-                        <div
-                          key={yearData.financialYear}
-                          className="bg-amber-100/50 rounded px-2 py-1.5"
-                        >
-                          <div className="text-amber-600 font-medium">
-                            FY {yearData.financialYear}
-                          </div>
-                          <div className="text-amber-900 font-bold">
-                            {yearData.transactions.toLocaleString()} transactions
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-
-                  {/* Show overflow indicator if more than 3 years */}
-                  {impactData.years?.length > 3 && (
-                    <p className="text-xs text-amber-700 italic">
-                      +{impactData.years.length - 3} more year{impactData.years.length - 3 > 1 ? 's' : ''} affected
-                    </p>
-                  )}
-
-                  {/* Total transactions and estimated time */}
-                  <div className="pt-1 space-y-1 border-t border-amber-200">
-                    {/* <div className="text-xs text-amber-700 font-medium">
-                      📊 Total: <span className="font-bold">{impactData.totalTransactions?.toLocaleString() || 0} transactions</span>
-                    </div> */}
-                    <div className="text-xs text-amber-700 font-medium">
-                      ⏱️ Estimated time: <span className="font-bold">{impactData.estimatedTimeSeconds || 0} seconds</span>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
           </div>
 
           {/* Current Opening Balance Display */}
@@ -293,7 +220,7 @@ const OpeningBalanceEditDialog = ({
             </div>
           </div>
 
-          {/* Preview of Changes */}
+          {/* Preview of Changes
           {(newBalance !== currentBalance ||
             newBalanceType !== currentBalanceType) && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
@@ -318,7 +245,7 @@ const OpeningBalanceEditDialog = ({
                 </div>
               </div>
             </div>
-          )}
+          )} */}
 
           {/* Footer Buttons */}
           <DialogFooter className="gap-2 pt-2">
