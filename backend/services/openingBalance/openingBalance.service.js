@@ -125,34 +125,38 @@ const getBranchImpact = async (
       `[Opening Balance Service] Step 1: Finding first transaction for branch ${branchName}...`,
     );
 
-    const firstMonthlyBalance = await AccountMonthlyBalance.findOne({
-      account: accountId,
-      branch: branchId,
-    })
-      .sort({ year: 1, month: 1 })
-      .select("year month")
-      .lean();
+    // const firstMonthlyBalance = await AccountMonthlyBalance.findOne({
+    //   account: accountId,
+    //   branch: branchId,
+    // })
+    //   .sort({ year: 1, month: 1 })
+    //   .select("year month")
+    //   .lean();
 
-    // Skip if no transactions exist
-    if (!firstMonthlyBalance) {
-      console.log(
-        `[Opening Balance Service] ℹ️ No transactions found for branch ${branchName}, skipping`,
-      );
-      return null;
-    }
+    // // Skip if no transactions exist
+    // if (!firstMonthlyBalance) {
+    //   console.log(
+    //     `[Opening Balance Service] ℹ️ No transactions found for branch ${branchName}, skipping`,
+    //   );
+    //   return null;
+    // }
 
-    // ✅ NEW: Calculate which FY this month belongs to
-    // Create a date from the first monthly balance
-    const firstDate = new Date(
-      firstMonthlyBalance.year,
-      firstMonthlyBalance.month - 1,
-      1,
-    );
-    const startFY = calculateFinancialYear(firstDate, companyFYConfig);
+    // // ✅ NEW: Calculate which FY this month belongs to
+    // // Create a date from the first monthly balance
+    // const firstDate = new Date(
+    //   firstMonthlyBalance.year,
+    //   firstMonthlyBalance.month - 1,
+    //   1,
+    // );
+    // const startFY = calculateFinancialYear(firstDate, companyFYConfig);
+    const startFY = companyFYConfig?.startingYear
+      ? `${companyFYConfig.startingYear}-${companyFYConfig.startingYear + 1}`
+      : "";
 
-    console.log(
-      `[Opening Balance Service] First monthly balance: ${firstMonthlyBalance.month}/${firstMonthlyBalance.year}`,
-    );
+
+    // console.log(
+    //   `[Opening Balance Service] First monthly balance: ${firstMonthlyBalance.month}/${firstMonthlyBalance.year}`,
+    // );
     console.log(`[Opening Balance Service] Start FY: ${startFY}`);
 
     // ========================================
@@ -433,6 +437,7 @@ export const analyzeOpeningBalanceImpact = async (
 
     const companyFYConfig = {
       format: company.financialYear.format,
+      startingYear: company.financialYear.startingYear,
       startMonth: company.financialYear.startMonth,
       endMonth: company.financialYear.endMonth,
       currentFY: companySettings.financialYear.currentFY,
