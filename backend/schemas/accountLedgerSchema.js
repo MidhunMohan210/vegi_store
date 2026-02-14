@@ -37,7 +37,14 @@ export const AccountLedgerSchema = new mongoose.Schema(
     },
     transactionType: {
       type: String,
-      enum: ["sale", "purchase", "sales_return", "purchase_return","receipt","payment"],
+      enum: [
+        "sale",
+        "purchase",
+        "sales_return",
+        "purchase_return",
+        "receipt",
+        "payment",
+      ],
       required: [true, "Transaction type is required"],
     },
     ledgerSide: {
@@ -67,7 +74,7 @@ export const AccountLedgerSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // Indexes for faster queries
@@ -81,7 +88,7 @@ AccountLedgerSchema.statics.getLastBalance = async function (
   accountId,
   companyId,
   branchId,
-  session
+  session,
 ) {
   // Try to get last ledger entry
   const lastEntry = await this.findOne({
@@ -105,14 +112,20 @@ AccountLedgerSchema.statics.getLastBalance = async function (
       branches: branchId,
       company: companyId,
     })
-    .select("openingBalance")
+    .select("openingBalance openingBalanceType")
     .session(session);
 
   if (!accountMaster) throw new Error("Account not found");
 
-  console.log();
+  const openingBalance = accountMaster.openingBalance || 0;
+
+
+
   
 
-  // Return opening balance or 0 if account not found
-  return accountMaster?.openingBalance || 0;
+  if (accountMaster?.openingBalanceType == "cr") {
+    return -Math.abs(openingBalance);
+  } else {
+    return openingBalance;
+  }
 };

@@ -35,6 +35,10 @@ export const createAccountLedger = async (data, session) => {
       session
     );
 
+    // console.log("last Balance",lastBalance);
+    // console.log("ledgerSide",ledgerSide);
+    
+
     // Calculate new running balance
     let runningBalance;
     if (ledgerSide === "debit") {
@@ -44,6 +48,9 @@ export const createAccountLedger = async (data, session) => {
     } else {
       throw new Error(`Invalid ledger side: ${ledgerSide}`);
     }
+
+    // console.log("runningBalance",runningBalance);
+    
 
     // Create ledger entry
     const ledgerEntry = await AccountLedger.create(

@@ -149,7 +149,11 @@ AccountMonthlyBalanceSchema.statics.getOpeningBalance = async function (
     return 0;
   }
 
-  const masterOpeningBalance = accountMaster.openingBalance || 0;
+  let masterOpeningBalance = accountMaster.openingBalance || 0;
+
+  if(accountMaster.openingBalanceType === "cr") {
+    masterOpeningBalance *= -1;
+  }
   // console.log(`[Get Opening Balance] ✅ Using master opening balance: ${masterOpeningBalance} (${accountMaster.openingBalanceType})`);
 
   return masterOpeningBalance;
