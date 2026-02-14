@@ -119,7 +119,8 @@ export const useUpdateMasterOpeningBalance = (companyId, branchId) => {
 
       // Invalidate account master to refresh opening balance display
       queryClient.invalidateQueries({
-        queryKey: ["accountMaster"],
+        queryKey: ["accountMaster","list"],
+        
       });
 
       // Invalidate ledger queries

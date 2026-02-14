@@ -228,7 +228,7 @@ const OpeningBalanceService = {
         console.log("yearData", yearData);
         console.log("fyMap", fyMap);
         console.log("fyStr", fyStr);
-        
+
         const adjustment = adjustments.find((a) => a.financialYear === fyStr);
         const pendingDelta = pendingByFY.get(fyStr) || 0;
 

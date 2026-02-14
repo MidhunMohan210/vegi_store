@@ -211,54 +211,54 @@ const getBranchImpact = async (
       `[Opening Balance Service] Step 4: Checking for year opening adjustments...`,
     );
 
-    const finalYearsToRecalculate = [];
-    let stoppedDueToAdjustment = null;
+    const finalYearsToRecalculate = allFYs;
+    // let stoppedDueToAdjustment = null;
 
-    console.log("all Fys", allFYs);
+    // console.log("all Fys", allFYs);
 
-    for (const fy of allFYs) {
-      // Extract starting year from FY string "2024-2025" → "2024"
-      const fyStartYear = fy.split("-")[0];
+    // for (const fy of allFYs) {
+    //   // Extract starting year from FY string "2024-2025" → "2024"
+    //   const fyStartYear = fy.split("-")[0];
 
-      console.log({
-        entityId: accountId,
-        entityType: "party",
-        branch: branchId,
-        financialYear: fyStartYear, // ✅ Now matches database format
-        isCancelled: false,
-      });
+    //   console.log({
+    //     entityId: accountId,
+    //     entityType: "party",
+    //     branch: branchId,
+    //     financialYear: fyStartYear, // ✅ Now matches database format
+    //     isCancelled: false,
+    //   });
 
-      // Check if this FY has an adjustment BEFORE adding it
-      const adjustment = await YearOpeningAdjustment.findOne({
-        entityId: accountId,
-        entityType: "party",
-        branch: branchId,
-        financialYear: fyStartYear, // ✅ Use "2024" not "2024-2025"
-        isCancelled: false,
-      }).lean();
+    //   // Check if this FY has an adjustment BEFORE adding it
+    //   const adjustment = await YearOpeningAdjustment.findOne({
+    //     entityId: accountId,
+    //     entityType: "party",
+    //     branch: branchId,
+    //     financialYear: fyStartYear, // ✅ Use "2024" not "2024-2025"
+    //     isCancelled: false,
+    //   }).lean();
 
-      console.log("adjustment", adjustment);
+    //   console.log("adjustment", adjustment);
 
-      if (adjustment) {
-        console.log(
-          `[Opening Balance Service] ⚠️ Found adjustment for FY ${fy}, stopping before this year`,
-        );
-        stoppedDueToAdjustment = fy;
-        // DON'T add this year - stop before it
-        break;
-      }
+    //   if (adjustment) {
+    //     console.log(
+    //       `[Opening Balance Service] ⚠️ Found adjustment for FY ${fy}, stopping before this year`,
+    //     );
+    //     stoppedDueToAdjustment = fy;
+    //     // DON'T add this year - stop before it
+    //     break;
+    //   }
 
-      // If no adjustment, add this year to recalculation list
-      finalYearsToRecalculate.push(fy);
-    }
+    //   // If no adjustment, add this year to recalculation list
+    //   finalYearsToRecalculate.push(fy);
+    // }
 
     console.log(
       `[Opening Balance Service] Final FYs to recalculate:`,
       finalYearsToRecalculate,
     );
-    console.log(
-      `[Opening Balance Service] Stopped due to adjustment at: ${stoppedDueToAdjustment}`,
-    );
+    // console.log(
+    //   `[Opening Balance Service] Stopped due to adjustment at: ${stoppedDueToAdjustment}`,
+    // );
 
     // Skip if no years to recalculate
     if (finalYearsToRecalculate.length === 0) {
@@ -305,7 +305,7 @@ const getBranchImpact = async (
       branchName,
       yearsToRecalculate: finalYearsToRecalculate,
       transactionCount: totalTransactionCount,
-      stoppedDueToAdjustment,
+      // stoppedDueToAdjustment,
     };
   } catch (error) {
     console.error(

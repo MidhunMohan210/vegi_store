@@ -20,6 +20,9 @@ const FinancialYearSettings = () => {
     companySettingsQueries.detail(companyId),
   );
 
+  // console.log(data);
+  
+
   const updateFYMutation = useUpdateFinancialYear(companyId);
 
  
