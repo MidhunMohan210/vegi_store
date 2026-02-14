@@ -13,7 +13,21 @@ import {
   getMonthsInFY,
   getMonthDateRange,
 } from "../../utils/financialYear.js";
+import OutstandingModel from "../../model/OutstandingModel.js";
+import { calculateReceiptPaymentTotals } from "../../helpers/transactionHelpers/outstandingService.js";
 
+// Convert amount + type → signed number
+export function normalizeAmount(amount = 0, type = "dr") {
+  return type === "cr" ? -Math.abs(amount) : Math.abs(amount);
+}
+
+// Convert signed number → { amount, type }
+export function denormalizeAmount(value = 0) {
+  return {
+    amount: Math.abs(value),
+    type: value < 0 ? "cr" : "dr",
+  };
+}
 /**
  * ============================================
  * OPENING BALANCE SERVICE - IMPACT ANALYSIS
@@ -152,7 +166,6 @@ const getBranchImpact = async (
     const startFY = companyFYConfig?.startingYear
       ? `${companyFYConfig.startingYear}-${companyFYConfig.startingYear + 1}`
       : "";
-
 
     // console.log(
     //   `[Opening Balance Service] First monthly balance: ${firstMonthlyBalance.month}/${firstMonthlyBalance.year}`,
@@ -889,6 +902,70 @@ export const executeOpeningBalanceUpdate = async (
     const branchResults = await Promise.all(recalculationPromises);
 
     console.log(`[Opening Balance Service] ✅ All branches recalculated`);
+
+    // ========================================
+    //  ✅  PHASE 5: Update outstanding associated with opening
+    // ========================================
+
+    console.log(
+      ` ✅ [Opening Balance Service] Phase 5: Updating outstanding associated with opening...`,
+    );
+
+    console.log("accountId",accountId);
+    
+    const existingOutstanding = await OutstandingModel.findOne({
+      transactionType: "opening_balance",
+      account: accountId,
+    }).session(session);
+
+    if (existingOutstanding) {
+      console.log(" Existing outstanding found to update.");
+      const { totalReceipts, totalPayments } =
+        await calculateReceiptPaymentTotals(existingOutstanding._id, session);
+
+      // --------------------------------------
+      // Normalize opening
+      // --------------------------------------
+
+      const openingSigned = normalizeAmount(
+        newOpeningBalance,
+        openingBalanceType,
+      );
+
+      // --------------------------------------
+      // Calculate closing (signed math)
+      // --------------------------------------
+
+      const closingSigned =
+        openingSigned +
+        totalPayments - // DR increases balance
+        totalReceipts; // CR decreases balance
+
+      // --------------------------------------
+      // Convert back to amount + type
+      // --------------------------------------
+
+      const { amount: closingBalance, type: closingType } =
+        denormalizeAmount(closingSigned);
+
+      console.log("openingSigned", openingSigned);
+      console.log("totalReceipts", totalReceipts);
+      console.log("totalPayments", totalPayments);
+      console.log("closingSigned", closingSigned);
+      console.log("closingBalance", closingBalance);
+      console.log("closingType", closingType);
+
+      // --------------------------------------
+      // Save
+      // --------------------------------------
+
+      existingOutstanding.closingBalanceAmount = closingBalance;
+      existingOutstanding.totalAmount =newOpeningBalance;
+      existingOutstanding.outstandingType = closingType;
+      existingOutstanding.lastUpdated = new Date();
+
+      await existingOutstanding.save({ session });
+    }
 
     // ========================================
     // PHASE 5: COMMIT TRANSACTION

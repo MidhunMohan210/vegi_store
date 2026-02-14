@@ -1,19 +1,21 @@
+import { calculateReceiptPaymentTotals } from "../../helpers/transactionHelpers/outstandingService.js";
+import OutstandingModel from "../../model/OutstandingModel.js";
 import {
   analyzeOpeningBalanceImpact,
   executeOpeningBalanceUpdate,
-} from '../../services/openingBalance/openingBalance.service.js';
+} from "../../services/openingBalance/openingBalance.service.js";
 
 /**
  * ============================================
  * OPENING BALANCE CONTROLLER
  * ============================================
- * 
+ *
  * Purpose: Handle HTTP requests for opening balance updates
- * 
+ *
  * Endpoints:
  * 1. POST /api/opening-balance/analyze - Analyze impact (warning generation)
  * 2. POST /api/opening-balance/update - Execute update (after user confirmation)
- * 
+ *
  * Flow:
  * Step 1: Frontend calls /analyze endpoint
  * Step 2: Backend returns warning with impact analysis
@@ -21,15 +23,14 @@ import {
  * Step 4: Frontend calls /update endpoint with confirmation
  * Step 5: Backend executes recalculation
  * Step 6: Returns detailed success/failure result
- * 
+ *
  * ============================================
  */
-
 
 /**
  * Analyze the impact of changing opening balance
  * This is a READ-ONLY operation that returns warning data
- * 
+ *
  * Route: POST /api/opening-balance/analyze
  * Query Params: companyId, branchId (for authentication/context)
  * Body: {
@@ -38,7 +39,7 @@ import {
  *   newOpeningBalance: 2000,
  *   openingBalanceType: "dr"
  * }
- * 
+ *
  * Response: {
  *   success: true,
  *   data: {
@@ -69,15 +70,16 @@ export const analyzeOpeningBalanceImpactController = async (req, res) => {
     console.log(`[Controller] Step 1: Extracting request data...`);
 
     const { companyId, branchId } = req.query;
-    const { entityType, entityId, newOpeningBalance, openingBalanceType } = req.body;
+    const { entityType, entityId, newOpeningBalance, openingBalanceType } =
+      req.body;
 
     // Validate required fields
     if (!companyId) {
       console.log(`[Controller] ❌ Missing companyId in query`);
       return res.status(400).json({
         success: false,
-        error: 'MISSING_COMPANY_ID',
-        message: 'Company ID is required',
+        error: "MISSING_COMPANY_ID",
+        message: "Company ID is required",
       });
     }
 
@@ -85,8 +87,8 @@ export const analyzeOpeningBalanceImpactController = async (req, res) => {
       console.log(`[Controller] ❌ Missing entityId in body`);
       return res.status(400).json({
         success: false,
-        error: 'MISSING_ENTITY_ID',
-        message: 'Entity ID is required',
+        error: "MISSING_ENTITY_ID",
+        message: "Entity ID is required",
       });
     }
 
@@ -94,26 +96,28 @@ export const analyzeOpeningBalanceImpactController = async (req, res) => {
       console.log(`[Controller] ❌ Missing newOpeningBalance in body`);
       return res.status(400).json({
         success: false,
-        error: 'MISSING_OPENING_BALANCE',
-        message: 'New opening balance is required',
+        error: "MISSING_OPENING_BALANCE",
+        message: "New opening balance is required",
       });
     }
 
-    if (!openingBalanceType || !['dr', 'cr'].includes(openingBalanceType)) {
-      console.log(`[Controller] ❌ Invalid openingBalanceType: ${openingBalanceType}`);
+    if (!openingBalanceType || !["dr", "cr"].includes(openingBalanceType)) {
+      console.log(
+        `[Controller] ❌ Invalid openingBalanceType: ${openingBalanceType}`,
+      );
       return res.status(400).json({
         success: false,
-        error: 'INVALID_BALANCE_TYPE',
+        error: "INVALID_BALANCE_TYPE",
         message: 'Opening balance type must be "dr" or "cr"',
       });
     }
 
     // Currently only supporting "party" entity type
-    if (entityType !== 'party') {
+    if (entityType !== "party") {
       console.log(`[Controller] ❌ Unsupported entityType: ${entityType}`);
       return res.status(400).json({
         success: false,
-        error: 'UNSUPPORTED_ENTITY_TYPE',
+        error: "UNSUPPORTED_ENTITY_TYPE",
         message: 'Only "party" entity type is currently supported',
       });
     }
@@ -121,7 +125,9 @@ export const analyzeOpeningBalanceImpactController = async (req, res) => {
     console.log(`[Controller] ✅ Request validation passed`);
     console.log(`[Controller] Company: ${companyId}`);
     console.log(`[Controller] Account: ${entityId}`);
-    console.log(`[Controller] New Balance: ${newOpeningBalance} (${openingBalanceType})`);
+    console.log(
+      `[Controller] New Balance: ${newOpeningBalance} (${openingBalanceType})`,
+    );
 
     // ========================================
     // STEP 2: CALL SERVICE FUNCTION
@@ -132,7 +138,7 @@ export const analyzeOpeningBalanceImpactController = async (req, res) => {
       companyId,
       entityId,
       newOpeningBalance,
-      openingBalanceType
+      openingBalanceType,
     );
 
     // ========================================
@@ -145,9 +151,12 @@ export const analyzeOpeningBalanceImpactController = async (req, res) => {
 
       // Determine HTTP status code based on error type
       let statusCode = 400;
-      if (result.error === 'ACCOUNT_NOT_FOUND' || result.error === 'COMPANY_NOT_FOUND') {
+      if (
+        result.error === "ACCOUNT_NOT_FOUND" ||
+        result.error === "COMPANY_NOT_FOUND"
+      ) {
         statusCode = 404;
-      } else if (result.error === 'DIRTY_DATA') {
+      } else if (result.error === "DIRTY_DATA") {
         statusCode = 409; // Conflict
       }
 
@@ -158,8 +167,12 @@ export const analyzeOpeningBalanceImpactController = async (req, res) => {
     // STEP 4: RETURN SUCCESS RESPONSE
     // ========================================
     console.log(`[Controller] ✅ Analysis complete, returning result`);
-    console.log(`[Controller] Affected branches: ${result.data.affectedBranches.length}`);
-    console.log(`[Controller] Total transactions: ${result.data.totalTransactions}`);
+    console.log(
+      `[Controller] Affected branches: ${result.data.affectedBranches.length}`,
+    );
+    console.log(
+      `[Controller] Total transactions: ${result.data.totalTransactions}`,
+    );
     console.log(`[Controller] ============================================\n`);
 
     return res.status(200).json(result);
@@ -172,19 +185,19 @@ export const analyzeOpeningBalanceImpactController = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      error: 'INTERNAL_SERVER_ERROR',
-      message: 'An error occurred while analyzing opening balance impact',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      error: "INTERNAL_SERVER_ERROR",
+      message: "An error occurred while analyzing opening balance impact",
+      details:
+        process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
-
 
 /**
  * Execute opening balance update with recalculation
  * This is a WRITE operation that modifies data
  * Should only be called after user confirms the warning from /analyze
- * 
+ *
  * Route: POST /api/opening-balance/update
  * Query Params: companyId, branchId (for authentication/context)
  * Body: {
@@ -194,7 +207,7 @@ export const analyzeOpeningBalanceImpactController = async (req, res) => {
  *   openingBalanceType: "dr",
  *   impactData: { ... } // Data from /analyze endpoint
  * }
- * 
+ *
  * Response: {
  *   success: true,
  *   message: "Opening balance updated successfully",
@@ -239,15 +252,21 @@ export const updateOpeningBalanceController = async (req, res) => {
     console.log(`[Controller] Step 1: Extracting request data...`);
 
     const { companyId, branchId } = req.query;
-    const { entityType, entityId, newOpeningBalance, openingBalanceType, impactData } = req.body;
+    const {
+      entityType,
+      entityId,
+      newOpeningBalance,
+      openingBalanceType,
+      impactData,
+    } = req.body;
 
     // Validate required fields
     if (!companyId) {
       console.log(`[Controller] ❌ Missing companyId in query`);
       return res.status(400).json({
         success: false,
-        error: 'MISSING_COMPANY_ID',
-        message: 'Company ID is required',
+        error: "MISSING_COMPANY_ID",
+        message: "Company ID is required",
       });
     }
 
@@ -255,8 +274,8 @@ export const updateOpeningBalanceController = async (req, res) => {
       console.log(`[Controller] ❌ Missing entityId in body`);
       return res.status(400).json({
         success: false,
-        error: 'MISSING_ENTITY_ID',
-        message: 'Entity ID is required',
+        error: "MISSING_ENTITY_ID",
+        message: "Entity ID is required",
       });
     }
 
@@ -264,16 +283,18 @@ export const updateOpeningBalanceController = async (req, res) => {
       console.log(`[Controller] ❌ Missing newOpeningBalance in body`);
       return res.status(400).json({
         success: false,
-        error: 'MISSING_OPENING_BALANCE',
-        message: 'New opening balance is required',
+        error: "MISSING_OPENING_BALANCE",
+        message: "New opening balance is required",
       });
     }
 
-    if (!openingBalanceType || !['dr', 'cr'].includes(openingBalanceType)) {
-      console.log(`[Controller] ❌ Invalid openingBalanceType: ${openingBalanceType}`);
+    if (!openingBalanceType || !["dr", "cr"].includes(openingBalanceType)) {
+      console.log(
+        `[Controller] ❌ Invalid openingBalanceType: ${openingBalanceType}`,
+      );
       return res.status(400).json({
         success: false,
-        error: 'INVALID_BALANCE_TYPE',
+        error: "INVALID_BALANCE_TYPE",
         message: 'Opening balance type must be "dr" or "cr"',
       });
     }
@@ -282,17 +303,18 @@ export const updateOpeningBalanceController = async (req, res) => {
       console.log(`[Controller] ❌ Missing impactData in body`);
       return res.status(400).json({
         success: false,
-        error: 'MISSING_IMPACT_DATA',
-        message: 'Impact data from analysis is required. Please call /analyze endpoint first.',
+        error: "MISSING_IMPACT_DATA",
+        message:
+          "Impact data from analysis is required. Please call /analyze endpoint first.",
       });
     }
 
     // Currently only supporting "party" entity type
-    if (entityType !== 'party') {
+    if (entityType !== "party") {
       console.log(`[Controller] ❌ Unsupported entityType: ${entityType}`);
       return res.status(400).json({
         success: false,
-        error: 'UNSUPPORTED_ENTITY_TYPE',
+        error: "UNSUPPORTED_ENTITY_TYPE",
         message: 'Only "party" entity type is currently supported',
       });
     }
@@ -300,8 +322,12 @@ export const updateOpeningBalanceController = async (req, res) => {
     console.log(`[Controller] ✅ Request validation passed`);
     console.log(`[Controller] Company: ${companyId}`);
     console.log(`[Controller] Account: ${entityId}`);
-    console.log(`[Controller] New Balance: ${newOpeningBalance} (${openingBalanceType})`);
-    console.log(`[Controller] Affected branches: ${impactData.affectedBranches.length}`);
+    console.log(
+      `[Controller] New Balance: ${newOpeningBalance} (${openingBalanceType})`,
+    );
+    console.log(
+      `[Controller] Affected branches: ${impactData.affectedBranches.length}`,
+    );
 
     // ========================================
     // STEP 2: CALL SERVICE FUNCTION
@@ -313,15 +339,21 @@ export const updateOpeningBalanceController = async (req, res) => {
       entityId,
       newOpeningBalance,
       openingBalanceType,
-      impactData
+      impactData,
     );
+
+  
 
     // ========================================
     // STEP 3: RETURN SUCCESS RESPONSE
     // ========================================
     console.log(`\n[Controller] ✅ Recalculation complete, returning result`);
-    console.log(`[Controller] Transactions updated: ${result.data.totalTransactionsUpdated}`);
-    console.log(`[Controller] Monthly balances updated: ${result.data.totalMonthlyBalancesUpdated}`);
+    console.log(
+      `[Controller] Transactions updated: ${result.data.totalTransactionsUpdated}`,
+    );
+    console.log(
+      `[Controller] Monthly balances updated: ${result.data.totalMonthlyBalancesUpdated}`,
+    );
     console.log(`[Controller] Execution time: ${result.data.executionTime}`);
     console.log(`[Controller] ============================================\n`);
 
@@ -335,9 +367,10 @@ export const updateOpeningBalanceController = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      error: 'INTERNAL_SERVER_ERROR',
-      message: 'An error occurred while updating opening balance',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      error: "INTERNAL_SERVER_ERROR",
+      message: "An error occurred while updating opening balance",
+      details:
+        process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
