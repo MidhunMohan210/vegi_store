@@ -359,12 +359,32 @@ const OpeningBalanceService = {
     session.startTransaction();
 
     try {
-      let adjustment = await YearOpeningAdjustment.findOne({
-        entityId,
-        entityType,
-        financialYear,
-        isCancelled: false,
-      }).session(session);
+      const isParty = entityType === "party";
+      const isItem = entityType === "item";
+
+      if (!isParty && !isItem) {
+        throw new Error(`Unsupported entityType: ${entityType}`);
+      }
+
+      const adjustmentLookup = isItem
+        ? {
+            entityId,
+            entityType,
+            financialYear,
+            company: companyId,
+            branch: branchId,
+            isCancelled: false,
+          }
+        : {
+            entityId,
+            entityType,
+            financialYear,
+            isCancelled: false,
+          };
+
+      let adjustment = await YearOpeningAdjustment.findOne(adjustmentLookup).session(
+        session,
+      );
 
       if (adjustment) {
         console.log("adjustment already exists");
@@ -378,7 +398,8 @@ const OpeningBalanceService = {
         adjustment.branch = branchId;
         await adjustment.save({ session });
 
-        if (entityType === "party") {
+        // Party-only side effects
+        if (isParty) {
           await OpeningBalanceService.updateOutstandingForAdjustment({
             adjustment,
             session,
@@ -401,8 +422,8 @@ const OpeningBalanceService = {
         });
         await adjustment.save({ session });
 
-        if (entityType === "party") {
-          // 2. Create / upsert Outstanding for this adjustment
+        // Party-only side effects
+        if (isParty) {
           await OpeningBalanceService.createOutstandingForAdjustment({
             adjustment,
             userId,
@@ -469,8 +490,10 @@ const OpeningBalanceService = {
       adjustment.adjustmentAmount = 0;
       adjustment.adjustmentQuantity = 0;
 
-      /// update outstanding only for party adjustments
-      if (adjustment.entityType === "party") {
+      const isParty = adjustment.entityType === "party";
+
+      // Party-only side effects
+      if (isParty) {
         await OpeningBalanceService.updateOutstandingForAdjustment({
           adjustment,
           session,

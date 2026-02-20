@@ -107,6 +107,13 @@ export const saveAdjustment = async (req, res) => {
       });
     }
 
+    if (entityType === "item" && (!companyId || !branchId)) {
+      return res.status(400).json({
+        success: false,
+        message: "companyId and branchId are required for item adjustments",
+      });
+    }
+
     if (
       adjustmentAmount !== undefined &&
       !Number.isFinite(Number(adjustmentAmount))
