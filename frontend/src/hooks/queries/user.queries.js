@@ -8,6 +8,7 @@ export const userQueries = {
     queryOptions({
       queryKey: [...userQueries.all(), userId],
       queryFn: () => userService.getUserById(userId),
+      enabled: !!userId,
       ...options,
     }),
 };

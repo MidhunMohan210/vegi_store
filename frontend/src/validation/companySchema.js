@@ -25,6 +25,6 @@ export const CompanySchema = z.object({
   website: z.string().optional(),
   industry: z.string().optional(),
   authorizedSignatory: z.string().optional(),
-  numEmployees: z.number().optional()
+  numEmployees: z.number().optional(),
+  createdBy: z.string().optional()
 });
-

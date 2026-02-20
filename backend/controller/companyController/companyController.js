@@ -20,6 +20,14 @@ import CompanySettingsModel from "../../model/CompanySettings.model.js";
 // ✅ Create Company + default FY settings
 export const createCompany = async (req, res) => {
   try {
+    const createdBy = req.user?._id;
+    if (!createdBy) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized: user not found in request",
+      });
+    }
+
     const {
       companyName,
       companyType,
@@ -102,6 +110,7 @@ export const createCompany = async (req, res) => {
       numEmployees,
       status: status || "Active",
       financialYear: fyPayload,
+      createdBy,
     });
 
     const savedCompany = await newCompany.save();

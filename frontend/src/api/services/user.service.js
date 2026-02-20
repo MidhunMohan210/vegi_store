@@ -28,4 +28,18 @@ export const userService = {
       throw new Error("An unexpected error occurred");
     }
   },
+
+  updateUserAccess: async (userId, access) => {
+    try {
+      const response = await api.put(`/user/update-access/${userId}`, {
+        access,
+      });
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        throw new Error(error.response?.data?.message || error.message);
+      }
+      throw new Error("An unexpected error occurred");
+    }
+  },
 };

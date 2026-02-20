@@ -1,4 +1,5 @@
 import { z } from "zod"
+const objectIdRegex = /^[a-f\d]{24}$/i;
 // const CompanyBranchSchema = z.object({
 //   companyId: z.string().min(1, "Company is required"),
 //   branches: z.array(z.string()).min(1, "At least one branch must be selected")
@@ -14,3 +15,13 @@ export const UserSchema = z.object({
   companyName: z.string().min(1, "Company is required"),
   branchName: z.string().min(1, "Branch is required")
 })
+
+export const UserAccessSchema = z.object({
+  userId: z.string().regex(objectIdRegex, "Invalid user id"),
+  access: z.array(
+    z.object({
+      company: z.string().regex(objectIdRegex, "Invalid company id"),
+      branches: z.array(z.string().regex(objectIdRegex, "Invalid branch id")),
+    }),
+  ),
+});

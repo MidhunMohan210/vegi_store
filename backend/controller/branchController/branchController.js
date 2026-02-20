@@ -10,6 +10,14 @@ import {PurchaseModel,SalesModel} from "../../model/TransactionModel.js";
 // ✅ Create new branch
 export const createBranch = async (req, res) => {
   try {
+    const createdBy = req.user?._id;
+    if (!createdBy) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized: user not found in request",
+      });
+    }
+
     const {
       companyId,
       branchName,
@@ -58,6 +66,7 @@ export const createBranch = async (req, res) => {
       mobile,
       landline,
       status: status || "active",
+      createdBy,
     });
 
     // 4️⃣ Save to database

@@ -537,6 +537,14 @@ const ProfileDropdown = () => {
             </DropdownMenuItem>
 
             <DropdownMenuItem
+              onClick={() => handleNavigate("/settings/user-access")}
+              className="cursor-pointer text-xs py-2 rounded-md focus:bg-slate-50 text-slate-700"
+            >
+              <User className="w-4 h-4 mr-2 text-slate-500" />
+              User
+            </DropdownMenuItem>
+
+            <DropdownMenuItem
               onClick={() => handleNavigate("/settings/company-settings")}
               className="cursor-pointer text-xs py-2 rounded-md focus:bg-slate-50 text-slate-700"
             >

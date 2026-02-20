@@ -1,5 +1,7 @@
 import CompanySettingsModel from "../../model/CompanySettings.model.js";
 import UserModel from "../../model/userModel.js";
+import mongoose from "mongoose";
+import BranchModel from "../../model/masters/BranchModel.js";
 export const createUsers = async (req, res) => {
   try {
     const {
@@ -116,6 +118,93 @@ export const getUserById = async (req, res) => {
     return res.status(200).json({
       message: "user found",
       data: user,
+    });
+  } catch (error) {
+    console.log("error", error.message);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const updateUserAccess = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { access = [] } = req.body;
+
+    const loggedInUserId = req.user?._id?.toString();
+    const isAdmin = req.user?.role?.toLowerCase?.() === "admin";
+
+    if (!loggedInUserId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    if (!isAdmin && loggedInUserId !== id) {
+      return res.status(403).json({
+        message: "You are not allowed to update this user access",
+      });
+    }
+
+    if (!Array.isArray(access)) {
+      return res.status(400).json({ message: "Access must be an array" });
+    }
+
+    const normalizedAccess = [];
+
+    for (const entry of access) {
+      const companyId = entry?.company;
+      const branchIds = Array.isArray(entry?.branches) ? entry.branches : [];
+
+      if (!companyId || !mongoose.Types.ObjectId.isValid(companyId)) {
+        return res.status(400).json({ message: "Invalid company in access" });
+      }
+
+      const uniqueBranchIds = [...new Set(branchIds)].filter((branchId) =>
+        mongoose.Types.ObjectId.isValid(branchId),
+      );
+
+      if (uniqueBranchIds.length !== branchIds.length) {
+        return res.status(400).json({ message: "Invalid branch in access" });
+      }
+
+      if (uniqueBranchIds.length > 0) {
+        const validBranchCount = await BranchModel.countDocuments({
+          _id: { $in: uniqueBranchIds },
+          companyId: companyId,
+        });
+
+        if (validBranchCount !== uniqueBranchIds.length) {
+          return res.status(400).json({
+            message: "Some branches do not belong to the selected company",
+          });
+        }
+      }
+
+      normalizedAccess.push({
+        company: companyId,
+        branches: uniqueBranchIds,
+      });
+    }
+
+    const updatedUser = await UserModel.findByIdAndUpdate(
+      id,
+      { access: normalizedAccess },
+      { new: true, runValidators: true },
+    )
+      .select("-password")
+      .populate({
+        path: "access.company",
+      })
+      .populate({
+        path: "access.branches",
+        select: "branchName _id",
+      });
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "user not found" });
+    }
+
+    return res.status(200).json({
+      message: "User access updated successfully",
+      data: updatedUser,
     });
   } catch (error) {
     console.log("error", error.message);

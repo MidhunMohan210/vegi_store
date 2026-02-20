@@ -53,6 +53,10 @@ export const CompanySchema = new mongoose.Schema(
         "Mobile number must be valid 10-digit Indian number",
       ],
     },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
 
     // Registration Details
     gstNumber: {
