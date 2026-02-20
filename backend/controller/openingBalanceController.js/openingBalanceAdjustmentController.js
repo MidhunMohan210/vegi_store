@@ -61,22 +61,69 @@ export const saveAdjustment = async (req, res) => {
       entityType,
       financialYear,
       adjustmentAmount,
+      adjustmentQuantity,
       reason,
       companyId,
       branchId,
     } = req.body;
 
-    // Validation
-    if (
-      !entityId ||
-      !entityType ||
-      !financialYear ||
-      adjustmentAmount === undefined ||
-      !reason
-    ) {
+    // Base validation
+    if (!entityId || !entityType || !financialYear || !reason) {
       return res.status(400).json({
         success: false,
         message: "Missing required fields",
+      });
+    }
+
+    if (!["party", "item"].includes(entityType)) {
+      return res.status(400).json({
+        success: false,
+        message: "entityType must be either 'party' or 'item'",
+      });
+    }
+
+    if (entityType === "party" && adjustmentAmount === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "adjustmentAmount is required for party",
+      });
+    }
+
+    if (entityType === "party" && adjustmentQuantity !== undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "adjustmentQuantity is not allowed for party",
+      });
+    }
+
+    if (
+      entityType === "item" &&
+      adjustmentQuantity === undefined &&
+      adjustmentAmount === undefined
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "adjustmentQuantity or adjustmentAmount is required for item",
+      });
+    }
+
+    if (
+      adjustmentAmount !== undefined &&
+      !Number.isFinite(Number(adjustmentAmount))
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "adjustmentAmount must be a valid number",
+      });
+    }
+
+    if (
+      adjustmentQuantity !== undefined &&
+      !Number.isFinite(Number(adjustmentQuantity))
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "adjustmentQuantity must be a valid number",
       });
     }
 
@@ -86,7 +133,8 @@ export const saveAdjustment = async (req, res) => {
       entityId,
       entityType,
       financialYear,
-      adjustmentAmount,
+      adjustmentAmount: Number(adjustmentAmount || 0),
+      adjustmentQuantity: Number(adjustmentQuantity || 0),
       reason,
       userId,
       companyId,
@@ -293,5 +341,3 @@ export const getOpeningBalanceRecalculationImpact = async (req, res) => {
     });
   }
 };
-
-

@@ -46,6 +46,7 @@ const OpeningBalanceManagement = ({
   const [editingAdjustmentId, setEditingAdjustmentId] = useState(null);
   const [adjustmentForm, setAdjustmentForm] = useState({
     desiredOpening: "",
+    desiredQuantity: "",
     reason: "",
   });
 
@@ -89,16 +90,23 @@ const OpeningBalanceManagement = ({
     const yearInfo = fullData.find((y) => y.financialYear === year);
     if (!yearInfo) return;
 
-    const currentValue =
+    const currentBalanceValue =
       entityType === "item"
-        ? (yearInfo.effectiveQuantity ?? yearInfo.openingQuantity)
-        : (yearInfo.effectiveOpening ?? yearInfo.openingBalance);
+        ? (yearInfo.effectiveValue ?? yearInfo.openingValue ?? "")
+        : (yearInfo.effectiveOpening ?? yearInfo.openingBalance ?? "");
+    const currentQuantityValue =
+      yearInfo.effectiveQuantity ?? yearInfo.openingQuantity ?? "";
 
     setAdjustmentForm({
-      desiredOpening: currentValue ?? "",
+      desiredOpening: currentBalanceValue,
+      desiredQuantity: currentQuantityValue,
       reason: yearInfo.adjustment ? "Update adjustment" : "",
     });
-    setEditingYearHasAdjustment(!!yearInfo.adjustment);
+    setEditingYearHasAdjustment(
+      entityType === "item"
+        ? !!(yearInfo.adjustmentQuantity || yearInfo.adjustmentValue)
+        : !!yearInfo.adjustment,
+    );
     setEditingAdjustmentId(yearInfo.adjustmentId || null);
   };
 
@@ -106,41 +114,67 @@ const OpeningBalanceManagement = ({
     setEditingYear(null);
     setEditingAdjustmentId(null);
     setEditingYearHasAdjustment(false);
-    setAdjustmentForm({ desiredOpening: "", reason: "" });
+    setAdjustmentForm({ desiredOpening: "", desiredQuantity: "", reason: "" });
   };
 
   const handleSaveAdjustment = () => {
     const yearInfo = fullData.find((y) => y.financialYear === editingYear);
     if (!yearInfo) return;
 
-    if (!adjustmentForm.desiredOpening || !adjustmentForm.reason) {
+    if (!adjustmentForm.reason) {
       toast.error("Please fill all fields");
       return;
     }
 
-    /// check if no change in the amount then do not proceed
-
-    const originalBase =
-      entityType === "party"
-        ? yearInfo.openingBalance
-        : yearInfo.openingQuantity;
-    const desired = parseFloat(adjustmentForm.desiredOpening);
-
-    if (originalBase === desired) {
-      toast.error("No change in opening balance");
-      return;
-    }
-
     let adjustmentAmount = 0;
+    let adjustmentQuantity = 0;
 
     if (entityType === "party") {
+      if (adjustmentForm.desiredOpening === "") {
+        toast.error("Please fill all fields");
+        return;
+      }
+
       const originalBase = yearInfo.openingBalance || 0;
       const desired = parseFloat(adjustmentForm.desiredOpening);
+      if (Number.isNaN(desired)) {
+        toast.error("Enter a valid opening balance");
+        return;
+      }
       adjustmentAmount = desired - originalBase;
     } else {
-      const originalBase = yearInfo.openingQuantity || 0;
-      const desired = parseFloat(adjustmentForm.desiredOpening);
-      adjustmentAmount = desired - originalBase;
+      if (
+        adjustmentForm.desiredQuantity === "" &&
+        adjustmentForm.desiredOpening === ""
+      ) {
+        toast.error("Enter desired quantity or desired value");
+        return;
+      }
+
+      if (adjustmentForm.desiredQuantity !== "") {
+        const originalBase = yearInfo.openingQuantity || 0;
+        const desired = parseFloat(adjustmentForm.desiredQuantity);
+        if (Number.isNaN(desired)) {
+          toast.error("Enter a valid opening quantity");
+          return;
+        }
+        adjustmentQuantity = desired - originalBase;
+      }
+
+      if (adjustmentForm.desiredOpening !== "") {
+        const originalValue = yearInfo.openingValue || 0;
+        const desiredValue = parseFloat(adjustmentForm.desiredOpening);
+        if (Number.isNaN(desiredValue)) {
+          toast.error("Enter a valid opening value");
+          return;
+        }
+        adjustmentAmount = desiredValue - originalValue;
+      }
+    }
+
+    if (adjustmentAmount === 0 && adjustmentQuantity === 0) {
+      toast.error("No change in opening balance");
+      return;
     }
 
     saveAdjustment(
@@ -149,6 +183,7 @@ const OpeningBalanceManagement = ({
         entityType,
         financialYear: editingYear,
         adjustmentAmount,
+        adjustmentQuantity,
         reason: adjustmentForm.reason,
         companyId,
         branchId,
@@ -570,23 +605,53 @@ const OpeningBalanceManagement = ({
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label className="dark:text-zinc-300">
-                Desired Opening Balance
+                {entityType === "item"
+                  ? "Desired Opening Quantity"
+                  : "Desired Opening Balance"}
               </Label>
               <Input
                 type="number"
-                value={adjustmentForm.desiredOpening}
+                value={
+                  entityType === "item"
+                    ? adjustmentForm.desiredQuantity
+                    : adjustmentForm.desiredOpening
+                }
                 onChange={(e) =>
                   setAdjustmentForm({
                     ...adjustmentForm,
-                    desiredOpening: e.target.value,
+                    ...(entityType === "item"
+                      ? { desiredQuantity: e.target.value }
+                      : { desiredOpening: e.target.value }),
                   })
                 }
                 className="dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-100"
               />
               <p className="text-[10px] text-slate-500">
-                System will automatically calculate the adjustment amount.
+                System will automatically calculate the adjustment.
               </p>
             </div>
+
+            {entityType === "item" && (
+              <div className="space-y-2">
+                <Label className="dark:text-zinc-300">
+                  Desired Opening Value
+                </Label>
+                <Input
+                  type="number"
+                  value={adjustmentForm.desiredOpening}
+                  onChange={(e) =>
+                    setAdjustmentForm({
+                      ...adjustmentForm,
+                      desiredOpening: e.target.value,
+                    })
+                  }
+                  className="dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-100"
+                />
+                <p className="text-[10px] text-slate-500">
+                  Optional. Use this to adjust opening value separately.
+                </p>
+              </div>
+            )}
             <div className="space-y-2">
               <Label className="dark:text-zinc-300">Reason</Label>
               <Textarea

@@ -349,6 +349,7 @@ const OpeningBalanceService = {
     entityType,
     financialYear,
     adjustmentAmount,
+    adjustmentQuantity,
     reason,
     userId,
     companyId,
@@ -370,16 +371,19 @@ const OpeningBalanceService = {
 
         // keep existing adjustmentNumber if already present
         adjustment.adjustmentAmount = adjustmentAmount;
+        adjustment.adjustmentQuantity = adjustmentQuantity;
         adjustment.reason = reason;
         adjustment.updatedBy = userId;
         adjustment.company = companyId;
         adjustment.branch = branchId;
         await adjustment.save({ session });
 
-        await OpeningBalanceService.updateOutstandingForAdjustment({
-          adjustment,
-          session,
-        });
+        if (entityType === "party") {
+          await OpeningBalanceService.updateOutstandingForAdjustment({
+            adjustment,
+            session,
+          });
+        }
       } else {
         const adjustmentNumber = nanoid(10); // or whatever length you want [web:6][web:12]
 
@@ -388,6 +392,7 @@ const OpeningBalanceService = {
           entityType,
           financialYear,
           adjustmentAmount,
+          adjustmentQuantity,
           reason,
           company: companyId,
           branch: branchId,
@@ -396,12 +401,14 @@ const OpeningBalanceService = {
         });
         await adjustment.save({ session });
 
-        // 2. Create / upsert Outstanding for this adjustment
-        await OpeningBalanceService.createOutstandingForAdjustment({
-          adjustment,
-          userId,
-          session,
-        });
+        if (entityType === "party") {
+          // 2. Create / upsert Outstanding for this adjustment
+          await OpeningBalanceService.createOutstandingForAdjustment({
+            adjustment,
+            userId,
+            session,
+          });
+        }
       }
 
       const startMonth = 4;
@@ -460,12 +467,15 @@ const OpeningBalanceService = {
       await adjustment.save({ session });
 
       adjustment.adjustmentAmount = 0;
+      adjustment.adjustmentQuantity = 0;
 
-      /// update outstanding
-      await OpeningBalanceService.updateOutstandingForAdjustment({
-        adjustment,
-        session,
-      });
+      /// update outstanding only for party adjustments
+      if (adjustment.entityType === "party") {
+        await OpeningBalanceService.updateOutstandingForAdjustment({
+          adjustment,
+          session,
+        });
+      }
 
       // Optionally, trigger recalculation if needed
       // await OpeningBalanceService.recalculateLedger(...);

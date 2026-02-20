@@ -5,13 +5,21 @@ import { useSelector } from "react-redux";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { itemMasterMutations } from "../../../hooks/mutations/itemMasterMutations";
 import BranchSelector from "../../../components/BranchSelector";
-import { Loader2, Package, Pencil, AlertCircle, Box } from "lucide-react";
+import {
+  Loader2,
+  Package,
+  Pencil,
+  AlertCircle,
+  Box,
+  FileBarChart,
+} from "lucide-react";
 import { units } from "../../../../constants/units";
 import { toast } from "sonner";
 import Keyboard from "react-simple-keyboard";
 import "simple-keyboard/build/css/index.css";
 import { malayalamLayout } from "@/keyboards/malayalamLayout";
 import "@/keyboards/malayalamKeyboard.css";
+import OpeningBalanceManagement from "@/components/modals/OpeningBalanceManagement";
 
 const ItemMasterForm = ({ selectedItem, isEditMode, onSuccess, onCancel }) => {
   const queryClient = useQueryClient();
@@ -25,6 +33,7 @@ const ItemMasterForm = ({ selectedItem, isEditMode, onSuccess, onCancel }) => {
 
   const [selectedBranches, setSelectedBranches] = useState([]);
   const [showKeyboard, setShowKeyboard] = useState(false);
+  const [showOpeningBalanceModal, setShowOpeningBalanceModal] = useState(false);
   const keyboardRef = useRef(null);
 
   const {
@@ -132,7 +141,8 @@ const ItemMasterForm = ({ selectedItem, isEditMode, onSuccess, onCancel }) => {
     "w-full rounded-xs text-xs border border-slate-300 rounded-md px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white disabled:bg-slate-50 disabled:text-slate-500";
 
   return (
-    <div className="h-full flex flex-col bg-slate-50 border-l border-slate-200 shadow-sm relative overflow-hidden">
+    <>
+      <div className="h-full flex flex-col bg-slate-50 border-l border-slate-200 shadow-sm relative overflow-hidden">
       {/* Loading Overlay */}
       {isLoading && (
         <div className="absolute inset-0 bg-white/80 backdrop-blur-[1px] z-50 flex items-center justify-center flex-col gap-2">
@@ -281,6 +291,18 @@ const ItemMasterForm = ({ selectedItem, isEditMode, onSuccess, onCancel }) => {
                   <ErrorMessage message="Select at least one branch" />
                 )}
               </div>
+
+              {isEditMode && selectedItem?._id && (
+                <button
+                  type="button"
+                  onClick={() => setShowOpeningBalanceModal(true)}
+                  disabled={isLoading}
+                  className="w-full bg-slate-100 border-2 border-blue-200 text-blue-700 text-sm font-bold py-4 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-all flex items-center justify-center gap-2.5 shadow-sm disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  <FileBarChart className="w-4 h-4" />
+                  Manage Year-wise Opening Balances
+                </button>
+              )}
             </div>
           </div>
         </form>
@@ -357,7 +379,16 @@ const ItemMasterForm = ({ selectedItem, isEditMode, onSuccess, onCancel }) => {
           </div>
         </div>
       )}
-    </div>
+      </div>
+
+      <OpeningBalanceManagement
+        open={showOpeningBalanceModal}
+        onOpenChange={setShowOpeningBalanceModal}
+        entityType="item"
+        entityId={selectedItem?._id}
+        entityName={itemNameValue || selectedItem?.itemName || "Item"}
+      />
+    </>
   );
 };
 
