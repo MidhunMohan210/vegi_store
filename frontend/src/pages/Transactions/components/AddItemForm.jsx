@@ -40,8 +40,7 @@ const AddItemForm = ({
 
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
-  console.log(clickedItemInTable);
-  console.log(items[clickedItemInTable]);
+
 
   // Refs
   const codeInputRef = useRef(null);
