@@ -98,17 +98,27 @@ export const update = async (req, res) => {
       delete updateData.priceLevels;
     }
 
-    const item = await ItemMasterModel.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, runValidators: true }
-    );
+    // Remove stock field if it exists in the update data
+    if ("stock" in updateData) {
+      delete updateData.stock;
+    }
+
+    const item = await ItemMasterModel.findById(req.params.id);
+
     if (!item) {
       return res.status(404).json({
         success: false,
         message: "Item not found",
       });
     }
+
+    // Update item fields except stock
+    Object.keys(updateData).forEach((key) => {
+      item[key] = updateData[key];
+    })
+
+    
+    await item.save();
     res.status(200).json({
       success: true,
       message: "Item updated successfully",
