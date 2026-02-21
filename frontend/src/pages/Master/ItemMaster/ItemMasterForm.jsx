@@ -36,6 +36,9 @@ const ItemMasterForm = ({ selectedItem, isEditMode, onSuccess, onCancel }) => {
   const [showOpeningBalanceModal, setShowOpeningBalanceModal] = useState(false);
   const keyboardRef = useRef(null);
 
+  console.log(selectedBranches);
+  
+
   const {
     register,
     handleSubmit,
@@ -52,6 +55,10 @@ const ItemMasterForm = ({ selectedItem, isEditMode, onSuccess, onCancel }) => {
   });
 
   const itemNameValue = watch("itemName");
+
+
+  // console.log(selectedItem);
+  
 
   const createMutation = useMutation(itemMasterMutations.create(queryClient));
   const updateMutation = useMutation(itemMasterMutations.update(queryClient));
@@ -103,6 +110,7 @@ const ItemMasterForm = ({ selectedItem, isEditMode, onSuccess, onCancel }) => {
         branch: branchId,
         openingStock: 0,
         currentStock: 0,
+        openingRate: 0,
       })),
       status: "active",
     };

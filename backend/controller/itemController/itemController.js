@@ -2,8 +2,11 @@ import { isMasterReferenced } from "../../helpers/MasterHelpers/masterHelper.js"
 import mongoose from "mongoose";
 
 import ItemMasterModel from "../../model/masters/ItemMasterModel.js";
-import {SalesModel,PurchaseModel} from "../../model/TransactionModel.js";
-import {SalesReturnModel,PurchaseReturnModel} from "../../model/TransactionModel.js";
+import { SalesModel, PurchaseModel } from "../../model/TransactionModel.js";
+import {
+  SalesReturnModel,
+  PurchaseReturnModel,
+} from "../../model/TransactionModel.js";
 import OutstandingModel from "../../model/OutstandingModel.js";
 import ItemLedger from "../../model/ItemsLedgerModel.js";
 // import {PaymentModel,ReceiptModel} from "../../model/FundTransactionMode.js";
@@ -68,7 +71,7 @@ export const getById = async (req, res) => {
   try {
     const item = await ItemMasterModel.findById(req.params.id).populate(
       "stock.branch",
-      "branchName"
+      "branchName",
     );
     if (!item) {
       return res.status(404).json({
@@ -98,11 +101,6 @@ export const update = async (req, res) => {
       delete updateData.priceLevels;
     }
 
-    // Remove stock field if it exists in the update data
-    if ("stock" in updateData) {
-      delete updateData.stock;
-    }
-
     const item = await ItemMasterModel.findById(req.params.id);
 
     if (!item) {
@@ -112,12 +110,32 @@ export const update = async (req, res) => {
       });
     }
 
-    // Update item fields except stock
-    Object.keys(updateData).forEach((key) => {
-      item[key] = updateData[key];
-    })
+    const stockDetails = updateData.stock;
 
-    
+    if (stockDetails) {
+      stockDetails.forEach((stock) => {
+        const existingStockIndex = item.stock.findIndex(
+          (s) => s.branch.toString() === stock.branch,
+        );
+
+        if (existingStockIndex !== -1) {
+          return;
+        } else {
+          item.stock.push({
+            branch: stock.branch,
+            openingStock: 0,
+            currentStock: 0,
+            openingRate: 0,
+          });
+        }
+      });
+    }
+
+    // // Update item fields except stock
+    // Object.keys(updateData).forEach((key) => {
+    //   item[key] = updateData[key];
+    // })
+
     await item.save();
     res.status(200).json({
       success: true,
@@ -140,7 +158,6 @@ export const update = async (req, res) => {
   }
 };
 
-
 export const deleteItem = async (req, res) => {
   try {
     const itemId = req.params.id;
@@ -149,9 +166,9 @@ export const deleteItem = async (req, res) => {
     const referencesToCheck = [
       { model: SalesModel, field: "items.item" },
       { model: PurchaseModel, field: "items.item" },
-         { model: SalesReturnModel, field: "items.item" },
-            { model: PurchaseReturnModel, field: "items.item" },
-            
+      { model: SalesReturnModel, field: "items.item" },
+      { model: PurchaseReturnModel, field: "items.item" },
+
       // Add other transaction models and fields here
     ];
 
@@ -215,7 +232,7 @@ export const updateRate = async (req, res) => {
 
     // Check if price level already exists in the item
     const existingPriceLevelIndex = item.priceLevels.findIndex(
-      (pl) => pl.priceLevel.toString() === priceLevelId
+      (pl) => pl.priceLevel.toString() === priceLevelId,
     );
 
     if (existingPriceLevelIndex >= 0) {
@@ -266,7 +283,7 @@ export const updateIndexes = async () => {
       {
         unique: true,
         collation: { locale: "en", strength: 2 },
-      }
+      },
     );
 
     console.log("New case-insensitive indexes created");
@@ -277,10 +294,9 @@ export const updateIndexes = async () => {
 
 //// for searching an item
 
-
 export const searchItems = async (req, res) => {
   console.log("call came here");
-  
+
   const {
     searchTerm,
     companyId,
@@ -297,90 +313,99 @@ export const searchItems = async (req, res) => {
       companyId,
       branchId,
       limit,
-      exactMatch === "true"
+      exactMatch === "true",
     );
 
     // If accountId and transactionType provided, fetch last rate from Transaction tables
     if (accountId && transactionType && items.length > 0) {
       console.log("✅ Fetching last rates");
-      
+
       const itemsWithLastRate = await Promise.all(
         items.map(async (item) => {
           const itemObj = item.toObject ? item.toObject() : { ...item };
-          
+
           let lastTransaction = null;
-          
-          if (transactionType === "sale" || transactionType === "sales_return") {
+
+          if (
+            transactionType === "sale" ||
+            transactionType === "sales_return"
+          ) {
             // Simple find query instead of aggregation
             const salesTx = await SalesModel.findOne({
-             
               company: companyId,
               branch: branchId,
               status: { $ne: "cancelled" },
-              "items.item": itemObj._id
+              "items.item": itemObj._id,
             })
-            .sort({ transactionDate: -1, createdAt: -1 })
-            .select('items transactionType transactionDate')
-            .lean();
-            
+              .sort({ transactionDate: -1, createdAt: -1 })
+              .select("items transactionType transactionDate")
+              .lean();
+
             if (salesTx) {
-              const itemInTx = salesTx.items.find(i => i.item.toString() === itemObj._id.toString());
+              const itemInTx = salesTx.items.find(
+                (i) => i.item.toString() === itemObj._id.toString(),
+              );
               if (itemInTx) {
                 lastTransaction = {
                   rate: itemInTx.rate,
                   transactionType: salesTx.transactionType,
-                  transactionDate: salesTx.transactionDate
+                  transactionDate: salesTx.transactionDate,
                 };
               }
             }
-          } else if (transactionType === "purchase" || transactionType === "purchase_return") {
+          } else if (
+            transactionType === "purchase" ||
+            transactionType === "purchase_return"
+          ) {
             const purchaseTx = await PurchaseModel.findOne({
               account: accountId,
               company: companyId,
               branch: branchId,
               status: { $ne: "cancelled" },
-              "items.item": itemObj._id
+              "items.item": itemObj._id,
             })
-            .sort({ transactionDate: -1, createdAt: -1 })
-            .select('items transactionType transactionDate')
-            .lean();
-            
+              .sort({ transactionDate: -1, createdAt: -1 })
+              .select("items transactionType transactionDate")
+              .lean();
+
             if (purchaseTx) {
-              const itemInTx = purchaseTx.items.find(i => i.item.toString() === itemObj._id.toString());
+              const itemInTx = purchaseTx.items.find(
+                (i) => i.item.toString() === itemObj._id.toString(),
+              );
               if (itemInTx) {
                 lastTransaction = {
                   rate: itemInTx.rate,
                   transactionType: purchaseTx.transactionType,
-                  transactionDate: purchaseTx.transactionDate
+                  transactionDate: purchaseTx.transactionDate,
                 };
               }
             }
           }
-          
+
           if (lastTransaction) {
             itemObj.lastRate = lastTransaction.rate;
             itemObj.lastTransactionType = lastTransaction.transactionType;
             itemObj.lastTransactionDate = lastTransaction.transactionDate;
-            console.log(`✅ Found last rate for ${itemObj.itemName}:`, lastTransaction.rate);
+            console.log(
+              `✅ Found last rate for ${itemObj.itemName}:`,
+              lastTransaction.rate,
+            );
           } else {
             console.log(`❌ No last rate found for ${itemObj.itemName}`);
           }
-          
+
           return itemObj;
-        })
+        }),
       );
-      
+
       return res.json({ data: itemsWithLastRate, message: "items found" });
     }
 
     // ✅ ADDED: Response when accountId/transactionType not provided
     res.json({ data: items, message: "items found" });
-    
   } catch (error) {
     // ✅ ADDED: Error handling
     console.error("Search items error:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
-
-

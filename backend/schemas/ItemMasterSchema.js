@@ -70,6 +70,11 @@ const ItemMasterSchema = new mongoose.Schema(
             type: Number,
             default: 0,     
           },
+          openingRate: {
+            type: Number,
+            default: 0,
+            min: [0, "Opening rate cannot be negative"],
+          },
         },
       ],
       validate: {

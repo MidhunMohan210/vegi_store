@@ -435,14 +435,14 @@ const OpeningBalanceService = {
       const startMonth = 4;
       const startYear = parseInt(financialYear, 10);
 
-      await OpeningBalanceService.recalculateLedger(
-        entityId,
-        branchId,
-        companyId,
-        startMonth,
-        startYear,
-        session,
-      );
+      // await OpeningBalanceService.recalculateLedger(
+      //   entityId,
+      //   branchId,
+      //   companyId,
+      //   startMonth,
+      //   startYear,
+      //   session,
+      // );
 
       await session.commitTransaction();
       return adjustment;
