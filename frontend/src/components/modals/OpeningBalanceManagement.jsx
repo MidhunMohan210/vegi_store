@@ -183,7 +183,7 @@ const OpeningBalanceManagement = ({
         entityType,
         financialYear: editingYear,
         adjustmentAmount,
-        adjustmentQuantity,
+        adjustmentQuantity :entityType === "item" ? adjustmentQuantity : undefined,
         reason: adjustmentForm.reason,
         companyId,
         branchId,
@@ -429,6 +429,12 @@ const OpeningBalanceManagement = ({
                         <th className="text-right py-3 px-4 text-xs font-semibold text-slate-700 dark:text-zinc-300">
                           Effective Value
                         </th>
+                        <th className="text-right py-3 px-4 text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                          Closing Qty
+                        </th>
+                        <th className="text-right py-3 px-4 text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                          Closing Value
+                        </th>
                         <th className="text-center py-3 px-4 text-xs font-semibold text-slate-700 dark:text-zinc-300">
                           Actions
                         </th>
@@ -497,6 +503,12 @@ const OpeningBalanceManagement = ({
                           </td>
                           <td className="py-3 px-4 text-right text-sm font-bold text-blue-600 dark:text-blue-400">
                             {formatCurrency(year.effectiveValue)}
+                          </td>
+                          <td className="py-3 px-4 text-right text-sm font-bold text-blue-600 dark:text-blue-400">
+                            {year?.closingQuantity || 0}
+                          </td>
+                          <td className="py-3 px-4 text-right text-sm font-bold text-blue-600 dark:text-blue-400">
+                            {year?.closingQuantity || 0}
                           </td>
                           <td className="py-3 px-4 text-center">
                             {!year.isLocked ? (

@@ -28,13 +28,23 @@ export const getYearWiseBalances = async (req, res) => {
       });
     }
 
-    const result = await OpeningBalanceService.getYearWiseBalances(
-      entityId,
-      entityType,
-      companyId,
-      branchId,
-      page,
-    );
+    let result;
+    if (entityType === "party") {
+      result = await OpeningBalanceService.getYearWiseAccountBalances(
+        entityId,
+        entityType,
+        companyId,
+        branchId,
+        page,
+      );
+    } else if (entityType === "item") {
+      result = await OpeningBalanceService.getYearWiseItemBalances(
+        entityId,
+        companyId,
+        branchId,
+        page,
+      );
+    }
 
     return res.status(200).json({
       success: true,

@@ -11,13 +11,19 @@ import AccountMaster from "../../model/masters/AccountMasterModel.js";
 import Outstanding from "../../model/OutstandingModel.js";
 import { nanoid } from "nanoid";
 import { calculateReceiptPaymentTotals } from "../../helpers/transactionHelpers/outstandingService.js";
+import ItemMaster from "../../model/masters/ItemMasterModel.js";
+import ItemMonthlyBalance from "../../model/ItemMonthlyBalanceModel.js";
+import { PurchaseModel } from "../../model/TransactionModel.js";
 
 const PAGE_SIZE = 5;
 
 // Helper: get FY label (number) for a given Date and FY startMonth
 
 const OpeningBalanceService = {
-  getYearWiseBalances: async (
+  // ======================================================
+  // PARTY (ACCOUNT)
+  // ======================================================
+  getYearWiseAccountBalances: async (
     entityId,
     entityType,
     companyId,
@@ -57,18 +63,16 @@ const OpeningBalanceService = {
       let masterOpening = 0;
       let masterCreatedAt = new Date();
 
-      if (entityType === "party") {
-        const master = await AccountMaster.findById(entityId).lean();
-        console.log("🔹 AccountMaster:", {
-          id: master?._id,
-          openingBalance: master?.openingBalance,
-          createdAt: master?.createdAt,
-        });
+      const master = await AccountMaster.findById(entityId).lean();
+      console.log("🔹 AccountMaster:", {
+        id: master?._id,
+        openingBalance: master?.openingBalance,
+        createdAt: master?.createdAt,
+      });
 
-        if (master) {
-          masterOpening = master.openingBalance || 0;
-          masterCreatedAt = master.createdAt || new Date();
-        }
+      if (master) {
+        masterOpening = master.openingBalance || 0;
+        masterCreatedAt = master.createdAt || new Date();
       }
 
       // 3. Monthly balances
@@ -341,6 +345,154 @@ const OpeningBalanceService = {
     }
   },
 
+  // ======================================================
+  // ITEM
+  // ======================================================
+
+  getYearWiseItemBalances: async (itemId, companyId, branchId, page = 1) => {
+    const company = await Company.findById(companyId).lean();
+    const startMonth = company?.financialYear?.startMonth || 4;
+    const startingYear = company?.financialYear?.startingYear || 2000;
+
+    const item = await ItemMaster.findById(itemId).lean();
+    const branchStock = item?.stock?.find(
+      (s) => s.branch.toString() === branchId.toString(),
+    );
+
+    const masterOpeningQty = branchStock?.openingStock || 0;
+    const masterOpeningRate = branchStock?.openingRate || 0;
+
+    const monthlyBalances = await ItemMonthlyBalance.find({
+      item: itemId,
+      company: companyId,
+      branch: branchId,
+    })
+      .sort({ year: 1, month: 1 })
+      .lean();
+
+    const adjustments = await YearOpeningAdjustment.find({
+      entityId: itemId,
+      entityType: "item",
+      company: companyId,
+      branch: branchId,
+      isCancelled: false,
+    }).lean();
+
+    const fyMap = new Map();
+
+    monthlyBalances.forEach((mb) => {
+      const fy = getFinancialYearForDate(
+        new Date(mb.year, mb.month - 1, 1),
+        startMonth,
+      ).toString();
+
+      if (!fyMap.has(fy)) fyMap.set(fy, []);
+      fyMap.get(fy).push(mb);
+    });
+
+    const currentFY = getFinancialYearForDate(new Date(), startMonth);
+
+    const allFYs = [];
+    for (let y = startingYear; y <= currentFY; y++) allFYs.push(y);
+    allFYs.reverse();
+
+    const totalPages = Math.ceil(allFYs.length / PAGE_SIZE);
+    const safePage = Math.min(Math.max(1, page), totalPages);
+    const pageFYs = allFYs.slice(
+      (safePage - 1) * PAGE_SIZE,
+      safePage * PAGE_SIZE,
+    );
+
+    const maxFY = Math.max(...pageFYs);
+
+    const chain = [];
+    let previousClosingQty = null;
+
+    for (let y = startingYear; y <= maxFY; y++) {
+      const fyStr = y.toString();
+      const months = fyMap.get(fyStr) || [];
+      const adj = adjustments.find((a) => a.financialYear === fyStr);
+
+      const node = {
+        financialYear: fyStr,
+        source: y === startingYear ? "master" : "carryForward",
+
+        openingQuantity: previousClosingQty ?? masterOpeningQty,
+        openingValue: 0,
+
+        adjustmentQuantity: adj?.adjustmentQuantity || 0,
+        adjustmentValue: adj?.adjustmentAmount || 0,
+
+        effectiveQuantity: 0,
+        effectiveValue: 0,
+
+        closingQuantity: 0,
+        isLocked: false,
+        isCurrent: y === currentFY,
+      };
+
+      node.effectiveQuantity = node.openingQuantity + node.adjustmentQuantity;
+
+      let movement = 0;
+
+      if (months.length) {
+        months.sort((a, b) => a.month - b.month);
+        movement =
+          (months[months.length - 1].closingStock || 0) -
+          (months[0].openingStock || 0);
+      }
+
+      node.closingQuantity = node.effectiveQuantity + movement;
+
+      previousClosingQty = node.closingQuantity;
+
+      // Last purchase rate
+      const fyStart = new Date(y, startMonth - 1, 1);
+      const fyEnd = new Date(y + 1, startMonth - 1, 0);
+
+      const lastPurchase = await PurchaseModel.findOne({
+        company: companyId,
+        branch: branchId,
+        isCancelled: false,
+        transactionDate: { $gte: fyStart, $lte: fyEnd },
+        "items.item": itemId,
+      })
+        .sort({ transactionDate: -1 })
+        .lean();
+
+      let rate = masterOpeningRate;
+
+      if (lastPurchase) {
+        const line = lastPurchase.items.find(
+          (i) => i.item.toString() === itemId.toString(),
+        );
+        if (line?.rate) rate = line.rate;
+      }
+
+      node.openingValue = masterOpeningRate * node.openingQuantity;
+
+      node.effectiveValue = rate * node.effectiveQuantity;
+
+      chain.push(node);
+    }
+
+    const displayYears = chain.filter((n) =>
+      pageFYs.includes(Number(n.financialYear)),
+    );
+
+    displayYears.sort((a, b) => b.financialYear - a.financialYear);
+
+    return {
+      years: displayYears,
+      pagination: {
+        page: safePage,
+        pageSize: PAGE_SIZE,
+        totalYears: allFYs.length,
+        totalPages,
+      },
+    };
+  },
+
   /**
    * Save adjustment and trigger recalculation
    */
@@ -382,9 +534,8 @@ const OpeningBalanceService = {
             isCancelled: false,
           };
 
-      let adjustment = await YearOpeningAdjustment.findOne(adjustmentLookup).session(
-        session,
-      );
+      let adjustment =
+        await YearOpeningAdjustment.findOne(adjustmentLookup).session(session);
 
       if (adjustment) {
         console.log("adjustment already exists");
