@@ -117,6 +117,7 @@ export const useStockAdjustment = (initialData = null) => {
     // State
     stockAdjustmentData,
     clickedItemInTable,
+    setClickedItemInTable,
     
     // Stock adjustment data updates
     updateStockAdjustmentData,

@@ -18,7 +18,7 @@ const AddItemForm = ({
   transactionType,
   account,
   requireAccount = true,
-  setClickedItemInTable
+  setClickedItemInTable,
 }) => {
   const [localItem, setLocalItem] = useState({
     item: null,
@@ -42,6 +42,7 @@ const AddItemForm = ({
 
 
 
+
   // Refs
   const codeInputRef = useRef(null);
   const nameInputRef = useRef(null);
@@ -54,9 +55,12 @@ const AddItemForm = ({
     (transactionType === "sale" ||
       transactionType === "sales_return" ||
       transactionType === "stock_adjustment" ||
-      ((transactionType === "purchase" ||
-        transactionType === "purchase_return") &&
-        !!account));
+      transactionType === "purchase" ||
+      transactionType === "purchase_return");
+
+  // console.log(isSearchEnabled);
+  // console.log(debouncedSearchTerm);
+  console.log();
 
   useEffect(() => {
     clearLocalItemData();

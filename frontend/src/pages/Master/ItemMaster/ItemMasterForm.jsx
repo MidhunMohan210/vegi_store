@@ -17,7 +17,12 @@ import { units } from "../../../../constants/units";
 import { toast } from "sonner";
 import Keyboard from "react-simple-keyboard";
 import "simple-keyboard/build/css/index.css";
-import { malayalamLayout } from "@/keyboards/malayalamLayout";
+import {
+  malayalamLayout,
+  malayalamDisplay,
+  malayalamShortcutsByCode,
+  malayalamButtonTheme,
+} from "@/keyboards/malayalamLayout";
 import "@/keyboards/malayalamKeyboard.css";
 import OpeningBalanceManagement from "@/components/modals/OpeningBalanceManagement";
 
@@ -35,6 +40,8 @@ const ItemMasterForm = ({ selectedItem, isEditMode, onSuccess, onCancel }) => {
   const [showKeyboard, setShowKeyboard] = useState(false);
   const [showOpeningBalanceModal, setShowOpeningBalanceModal] = useState(false);
   const keyboardRef = useRef(null);
+  const keyboardContainerRef = useRef(null);
+  const keyboardToggleRef = useRef(null);
 
   console.log(selectedBranches);
   
@@ -86,6 +93,74 @@ const ItemMasterForm = ({ selectedItem, isEditMode, onSuccess, onCancel }) => {
       keyboardRef.current.setInput(itemNameValue || "");
     }
   }, [itemNameValue, showKeyboard]);
+
+  useEffect(() => {
+    if (!showKeyboard) return;
+
+    const handleAltShortcut = (event) => {
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+      const mapping = malayalamShortcutsByCode[event.code];
+      const mappedValue = event.shiftKey ? mapping?.shift : mapping?.base;
+      if (!mappedValue) return;
+
+      event.preventDefault();
+      const currentInput = keyboardRef.current?.getInput?.() ?? itemNameValue ?? "";
+      let nextInput = currentInput;
+
+      if (mappedValue === "{bksp}") {
+        nextInput = currentInput.slice(0, -1);
+      } else if (mappedValue === "{space}") {
+        nextInput = `${currentInput} `;
+      } else {
+        nextInput = `${currentInput}${mappedValue}`;
+      }
+
+      setValue("itemName", nextInput, {
+        shouldValidate: true,
+        shouldDirty: true,
+      });
+      if (keyboardRef.current) {
+        keyboardRef.current.setInput(nextInput);
+      }
+    };
+
+    window.addEventListener("keydown", handleAltShortcut);
+    return () => window.removeEventListener("keydown", handleAltShortcut);
+  }, [showKeyboard, itemNameValue, setValue]);
+
+  useEffect(() => {
+    if (!showKeyboard) return;
+
+    const shouldKeepOpen = (target) => {
+      if (!target) return false;
+      if (target === itemNameRef.current) return true;
+      if (target === keyboardToggleRef.current) return true;
+      if (keyboardToggleRef.current?.contains?.(target)) return true;
+      if (keyboardContainerRef.current?.contains(target)) return true;
+      return false;
+    };
+
+    const handleFocusOutside = (event) => {
+      if (!shouldKeepOpen(event.target)) {
+        setShowKeyboard(false);
+      }
+    };
+
+    const handlePointerOutside = (event) => {
+      if (!shouldKeepOpen(event.target)) {
+        setShowKeyboard(false);
+      }
+    };
+
+    document.addEventListener("focusin", handleFocusOutside);
+    document.addEventListener("mousedown", handlePointerOutside);
+
+    return () => {
+      document.removeEventListener("focusin", handleFocusOutside);
+      document.removeEventListener("mousedown", handlePointerOutside);
+    };
+  }, [showKeyboard]);
 
 
   
@@ -196,46 +271,48 @@ const ItemMasterForm = ({ selectedItem, isEditMode, onSuccess, onCancel }) => {
             </div>
 
             <div className="space-y-4">
-              <div className="relative">
+              <div>
                 <InputLabel label="Item Name" required />
-                <input
-                  ref={itemNameRef}
-                  {...register("itemName", {
-                    required: "Item name is required",
-                    validate: {
-                      notEmpty: (v) =>
-                        v?.trim().length > 0 || "Cannot be empty",
-                    },
-                    onChange: (e) => {
-                      // Sync keyboard when typing in input field
-                      if (keyboardRef.current && showKeyboard) {
-                        keyboardRef.current.setInput(e.target.value);
-                      }
-                    },
-                  })}
-                  className={inputClass}
-                  placeholder="e.g., Premium Rice / പ്രീമിയം അരി"
-                  disabled={isLoading}
-                  onBlur={(e) => {
-                    setValue("itemName", e.target.value.trim(), {
-                      shouldValidate: true,
-                    });
-                    setShowKeyboard(false);
-                  }}
-                />
+                <div className="relative">
+                  <input
+                    ref={itemNameRef}
+                    {...register("itemName", {
+                      required: "Item name is required",
+                      validate: {
+                        notEmpty: (v) =>
+                          v?.trim().length > 0 || "Cannot be empty",
+                      },
+                      onChange: (e) => {
+                        // Sync keyboard when typing in input field
+                        if (keyboardRef.current && showKeyboard) {
+                          keyboardRef.current.setInput(e.target.value);
+                        }
+                      },
+                    })}
+                    className={`${inputClass} pr-10`}
+                    placeholder="e.g., Premium Rice / പ്രീമിയം അരി"
+                    disabled={isLoading}
+                    onBlur={(e) => {
+                      setValue("itemName", e.target.value.trim(), {
+                        shouldValidate: true,
+                      });
+                    }}
+                  />
 
-                {/* Keyboard Icon */}
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault(); // Prevent blur from firing
-                    itemNameRef.current?.focus();
-                    setShowKeyboard(true);
-                  }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-blue-600"
-                >
-                  ⌨️
-                </button>
+                  {/* Keyboard Icon */}
+                  <button
+                    ref={keyboardToggleRef}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault(); // Prevent blur from firing
+                      itemNameRef.current?.focus();
+                      setShowKeyboard(true);
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-blue-600"
+                  >
+                    ⌨️
+                  </button>
+                </div>
                 {errors.itemName && (
                   <ErrorMessage message={errors.itemName.message} />
                 )}
@@ -346,6 +423,7 @@ const ItemMasterForm = ({ selectedItem, isEditMode, onSuccess, onCancel }) => {
 
       {showKeyboard && (
         <div 
+          ref={keyboardContainerRef}
           className="fixed bottom-0 right-0 z-[9999] w-[50%] max-h-[80%] overflow-y-auto bg-black shadow-2xl"
           onMouseDown={(e) => {
             // Prevent clicks on keyboard from removing focus from input
@@ -374,6 +452,8 @@ const ItemMasterForm = ({ selectedItem, isEditMode, onSuccess, onCancel }) => {
             <Keyboard
               keyboardRef={(r) => (keyboardRef.current = r)}
               layout={malayalamLayout}
+              display={malayalamDisplay}
+              buttonTheme={malayalamButtonTheme}
               onChange={(input) => {
                 setValue("itemName", input, { shouldValidate: true });
               }}

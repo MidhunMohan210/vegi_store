@@ -30,6 +30,8 @@ const CreateStockAdjustment = () => {
     clickedItemInTable,
     handleItemClickInItemsTable,
     resetStockAdjustmentData,
+    setClickedItemInTable,
+
   } = useStockAdjustment();
 
   const selectedCompanyFromStore = useSelector(
@@ -155,6 +157,8 @@ const CreateStockAdjustment = () => {
               clickedItemInTable={clickedItemInTable}
               transactionType="stock_adjustment"
               account={null}
+              setClickedItemInTable={setClickedItemInTable}
+
             />
           </div>
 

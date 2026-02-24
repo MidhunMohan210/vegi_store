@@ -484,14 +484,38 @@ export const analyzeOpeningBalanceImpact = async (
       `[Opening Balance Service] Valid branch impacts: ${validBranchImpacts.length}`,
     );
 
+    console.log("branch impacts", branchImpacts);
+
     // Check if any branches need recalculation
     if (validBranchImpacts.length === 0) {
       console.log(`[Opening Balance Service] ℹ️ No recalculation needed`);
+
+      // just update the master opening balance since no transactions exist
+      await AccountMaster.updateOne(
+        { _id: accountId, company: companyId },
+        {
+          $set: {
+            openingBalance: newOpeningBalance,
+            openingBalanceType: openingBalanceType,
+          },
+        },
+      );
+
       return {
-        success: false,
-        error: "NO_RECALCULATION_NEEDED",
+        success: true,
         message:
-          "No transactions found for this account across any branch, or all years have adjustments.",
+          "Opening balance updated successfully. No transactions found for this account across any branch, so no recalculation was needed.",
+        data: {
+          accountId,
+          accountName: account.accountName,
+          oldOpeningBalance: account.openingBalance,
+          oldOpeningBalanceType: account.openingBalanceType,
+          newOpeningBalance,
+          newOpeningBalanceType: openingBalanceType,
+          affectedBranches: [],
+          totalTransactions: 0,
+          estimatedTime: "0s",
+        },
       };
     }
 
@@ -911,8 +935,8 @@ export const executeOpeningBalanceUpdate = async (
       ` ✅ [Opening Balance Service] Phase 5: Updating outstanding associated with opening...`,
     );
 
-    console.log("accountId",accountId);
-    
+    console.log("accountId", accountId);
+
     const existingOutstanding = await OutstandingModel.findOne({
       transactionType: "opening_balance",
       account: accountId,
@@ -960,7 +984,7 @@ export const executeOpeningBalanceUpdate = async (
       // --------------------------------------
 
       existingOutstanding.closingBalanceAmount = closingBalance;
-      existingOutstanding.totalAmount =newOpeningBalance;
+      existingOutstanding.totalAmount = newOpeningBalance;
       existingOutstanding.outstandingType = closingType;
       existingOutstanding.lastUpdated = new Date();
 

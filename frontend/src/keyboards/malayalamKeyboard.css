@@ -27,6 +27,14 @@
   color: #f8fafc;
   transition: all 0.12s ease;
   font-size: 12px !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.simple-keyboard .hg-button .hg-button-content {
+  white-space: normal;
+  line-height: 1;
+  text-align: center;
 }
 
 /* Hover */
@@ -57,3 +65,203 @@
   background: #dc2626;
   color: white;
 }
+
+/* Visual grouping */
+.simple-keyboard .hg-button.hg-chillu {
+  background: #24344b;
+  border-color: #3a567a;
+}
+
+.simple-keyboard .hg-button.hg-conjunct {
+  background: #2a3148;
+  border-color: #485a87;
+}
+
+.simple-keyboard .hg-button.hg-matra {
+  background: #243039;
+  border-color: #43617a;
+}
+
+/* Small shortcut labels for all keys */
+.simple-keyboard .hg-button[data-skbtn="അ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ആ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഇ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഈ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഉ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഊ"]::after,
+.simple-keyboard .hg-button[data-skbtn="എ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഏ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഐ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഒ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഓ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഔ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ക"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഖ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഗ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഘ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ങ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ച"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഛ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ജ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഝ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഞ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ട"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഠ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഡ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഢ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ണ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ത"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഥ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ദ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ധ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ന"]::after,
+.simple-keyboard .hg-button[data-skbtn="പ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഫ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ബ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഭ"]::after,
+.simple-keyboard .hg-button[data-skbtn="മ"]::after,
+.simple-keyboard .hg-button[data-skbtn="യ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ര"]::after,
+.simple-keyboard .hg-button[data-skbtn="ല"]::after,
+.simple-keyboard .hg-button[data-skbtn="വ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ശ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഷ"]::after,
+.simple-keyboard .hg-button[data-skbtn="സ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഹ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ള"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഴ"]::after,
+.simple-keyboard .hg-button[data-skbtn="റ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ർ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ൽ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ൻ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ൾ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ൺ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ക്ഷ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ങ്ക"]::after,
+.simple-keyboard .hg-button[data-skbtn="ങ്ങ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ച്ച"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഞ്ച"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഞ്ഞ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ന്ന"]::after,
+.simple-keyboard .hg-button[data-skbtn="പ്പ"]::after,
+.simple-keyboard .hg-button[data-skbtn="മ്പ"]::after,
+.simple-keyboard .hg-button[data-skbtn="മ്മ"]::after,
+.simple-keyboard .hg-button[data-skbtn="വ്വ"]::after,
+.simple-keyboard .hg-button[data-skbtn="റ്റ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ണ്ട"]::after,
+.simple-keyboard .hg-button[data-skbtn="ണ്ണ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ത്ത"]::after,
+.simple-keyboard .hg-button[data-skbtn="ന്ത"]::after,
+.simple-keyboard .hg-button[data-skbtn="ന്ദ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ബ്ബ"]::after,
+.simple-keyboard .hg-button[data-skbtn="യ്യ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ാ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ി"]::after,
+.simple-keyboard .hg-button[data-skbtn="ീ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ു"]::after,
+.simple-keyboard .hg-button[data-skbtn="ൂ"]::after,
+.simple-keyboard .hg-button[data-skbtn="െ"]::after,
+.simple-keyboard .hg-button[data-skbtn="േ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ൈ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ൊ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ോ"]::after,
+.simple-keyboard .hg-button[data-skbtn="ൗ"]::after,
+.simple-keyboard .hg-button[data-skbtn="്"]::after,
+.simple-keyboard .hg-button[data-skbtn="ം"]::after,
+.simple-keyboard .hg-button[data-skbtn="ഃ"]::after {
+  position: absolute;
+  right: 6px;
+  bottom: 3px;
+  font-size: 8px;
+  font-weight: 700;
+  color: #60a5fa;
+  letter-spacing: 0.2px;
+  line-height: 1;
+}
+
+.simple-keyboard .hg-button[data-skbtn="അ"]::after { content: "A"; }
+.simple-keyboard .hg-button[data-skbtn="ആ"]::after { content: "S"; }
+.simple-keyboard .hg-button[data-skbtn="ഇ"]::after { content: "D"; }
+.simple-keyboard .hg-button[data-skbtn="ഈ"]::after { content: "F"; }
+.simple-keyboard .hg-button[data-skbtn="ഉ"]::after { content: "G"; }
+.simple-keyboard .hg-button[data-skbtn="ഊ"]::after { content: "H"; }
+.simple-keyboard .hg-button[data-skbtn="എ"]::after { content: "J"; }
+.simple-keyboard .hg-button[data-skbtn="ഏ"]::after { content: "K"; }
+.simple-keyboard .hg-button[data-skbtn="ഐ"]::after { content: "L"; }
+.simple-keyboard .hg-button[data-skbtn="ഒ"]::after { content: ";"; }
+.simple-keyboard .hg-button[data-skbtn="ഓ"]::after { content: "'"; }
+.simple-keyboard .hg-button[data-skbtn="ഔ"]::after { content: "W"; }
+.simple-keyboard .hg-button[data-skbtn="ക"]::after { content: "Q"; }
+.simple-keyboard .hg-button[data-skbtn="ഖ"]::after { content: "E"; }
+.simple-keyboard .hg-button[data-skbtn="ഗ"]::after { content: "R"; }
+.simple-keyboard .hg-button[data-skbtn="ഘ"]::after { content: "T"; }
+.simple-keyboard .hg-button[data-skbtn="ങ"]::after { content: "Y"; }
+.simple-keyboard .hg-button[data-skbtn="ച"]::after { content: "U"; }
+.simple-keyboard .hg-button[data-skbtn="ഛ"]::after { content: "I"; }
+.simple-keyboard .hg-button[data-skbtn="ജ"]::after { content: "O"; }
+.simple-keyboard .hg-button[data-skbtn="ഝ"]::after { content: "P"; }
+.simple-keyboard .hg-button[data-skbtn="ഞ"]::after { content: "["; }
+.simple-keyboard .hg-button[data-skbtn="ട"]::after { content: "]"; }
+.simple-keyboard .hg-button[data-skbtn="ഠ"]::after { content: "\\"; }
+.simple-keyboard .hg-button[data-skbtn="ഡ"]::after { content: "Z"; }
+.simple-keyboard .hg-button[data-skbtn="ഢ"]::after { content: "X"; }
+.simple-keyboard .hg-button[data-skbtn="ണ"]::after { content: "C"; }
+.simple-keyboard .hg-button[data-skbtn="ത"]::after { content: "V"; }
+.simple-keyboard .hg-button[data-skbtn="ഥ"]::after { content: "B"; }
+.simple-keyboard .hg-button[data-skbtn="ദ"]::after { content: "N"; }
+.simple-keyboard .hg-button[data-skbtn="ധ"]::after { content: "M"; }
+.simple-keyboard .hg-button[data-skbtn="ന"]::after { content: ","; }
+.simple-keyboard .hg-button[data-skbtn="പ"]::after { content: "."; }
+.simple-keyboard .hg-button[data-skbtn="ഫ"]::after { content: "/"; }
+.simple-keyboard .hg-button[data-skbtn="ബ"]::after { content: "1"; }
+.simple-keyboard .hg-button[data-skbtn="ഭ"]::after { content: "2"; }
+.simple-keyboard .hg-button[data-skbtn="മ"]::after { content: "3"; }
+.simple-keyboard .hg-button[data-skbtn="യ"]::after { content: "4"; }
+.simple-keyboard .hg-button[data-skbtn="ര"]::after { content: "5"; }
+.simple-keyboard .hg-button[data-skbtn="ല"]::after { content: "6"; }
+.simple-keyboard .hg-button[data-skbtn="വ"]::after { content: "7"; }
+.simple-keyboard .hg-button[data-skbtn="ശ"]::after { content: "8"; }
+.simple-keyboard .hg-button[data-skbtn="ഷ"]::after { content: "9"; }
+.simple-keyboard .hg-button[data-skbtn="സ"]::after { content: "0"; }
+.simple-keyboard .hg-button[data-skbtn="ഹ"]::after { content: "-"; }
+.simple-keyboard .hg-button[data-skbtn="ള"]::after { content: "="; }
+.simple-keyboard .hg-button[data-skbtn="ഴ"]::after { content: "`"; }
+.simple-keyboard .hg-button[data-skbtn="റ"]::after { content: "S+`"; }
+.simple-keyboard .hg-button[data-skbtn="ർ"]::after { content: "S+M"; }
+.simple-keyboard .hg-button[data-skbtn="ൽ"]::after { content: "S+,"; }
+.simple-keyboard .hg-button[data-skbtn="ൻ"]::after { content: "S+."; }
+.simple-keyboard .hg-button[data-skbtn="ൾ"]::after { content: "S+/"; }
+.simple-keyboard .hg-button[data-skbtn="ൺ"]::after { content: "S+'"; }
+.simple-keyboard .hg-button[data-skbtn="ക്ഷ"]::after { content: "S+Q"; }
+.simple-keyboard .hg-button[data-skbtn="ങ്ക"]::after { content: "S+W"; }
+.simple-keyboard .hg-button[data-skbtn="ങ്ങ"]::after { content: "S+E"; }
+.simple-keyboard .hg-button[data-skbtn="ച്ച"]::after { content: "S+R"; }
+.simple-keyboard .hg-button[data-skbtn="ഞ്ച"]::after { content: "S+T"; }
+.simple-keyboard .hg-button[data-skbtn="ഞ്ഞ"]::after { content: "S+Y"; }
+.simple-keyboard .hg-button[data-skbtn="ന്ന"]::after { content: "S+U"; }
+.simple-keyboard .hg-button[data-skbtn="പ്പ"]::after { content: "S+I"; }
+.simple-keyboard .hg-button[data-skbtn="മ്പ"]::after { content: "S+O"; }
+.simple-keyboard .hg-button[data-skbtn="മ്മ"]::after { content: "S+P"; }
+.simple-keyboard .hg-button[data-skbtn="വ്വ"]::after { content: "S+["; }
+.simple-keyboard .hg-button[data-skbtn="റ്റ"]::after { content: "S+]"; }
+.simple-keyboard .hg-button[data-skbtn="ണ്ട"]::after { content: "S+\\"; }
+.simple-keyboard .hg-button[data-skbtn="ണ്ണ"]::after { content: "S+Z"; }
+.simple-keyboard .hg-button[data-skbtn="ത്ത"]::after { content: "S+X"; }
+.simple-keyboard .hg-button[data-skbtn="ന്ത"]::after { content: "S+C"; }
+.simple-keyboard .hg-button[data-skbtn="ന്ദ"]::after { content: "S+V"; }
+.simple-keyboard .hg-button[data-skbtn="ബ്ബ"]::after { content: "S+B"; }
+.simple-keyboard .hg-button[data-skbtn="യ്യ"]::after { content: "S+N"; }
+.simple-keyboard .hg-button[data-skbtn="ാ"]::after { content: "S+1"; }
+.simple-keyboard .hg-button[data-skbtn="ി"]::after { content: "S+2"; }
+.simple-keyboard .hg-button[data-skbtn="ീ"]::after { content: "S+3"; }
+.simple-keyboard .hg-button[data-skbtn="ു"]::after { content: "S+4"; }
+.simple-keyboard .hg-button[data-skbtn="ൂ"]::after { content: "S+5"; }
+.simple-keyboard .hg-button[data-skbtn="െ"]::after { content: "S+6"; }
+.simple-keyboard .hg-button[data-skbtn="േ"]::after { content: "S+7"; }
+.simple-keyboard .hg-button[data-skbtn="ൈ"]::after { content: "S+8"; }
+.simple-keyboard .hg-button[data-skbtn="ൊ"]::after { content: "S+9"; }
+.simple-keyboard .hg-button[data-skbtn="ോ"]::after { content: "S+0"; }
+.simple-keyboard .hg-button[data-skbtn="ൗ"]::after { content: "S+-"; }
+.simple-keyboard .hg-button[data-skbtn="്"]::after { content: "S+="; }
+.simple-keyboard .hg-button[data-skbtn="ം"]::after { content: "S+A"; }
+.simple-keyboard .hg-button[data-skbtn="ഃ"]::after { content: "S+S"; }
