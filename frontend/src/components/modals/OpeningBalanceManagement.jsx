@@ -97,10 +97,13 @@ const OpeningBalanceManagement = ({
     const currentQuantityValue =
       yearInfo.effectiveQuantity ?? yearInfo.openingQuantity ?? "";
 
+
+      console.log(yearInfo);
+      
     setAdjustmentForm({
       desiredOpening: currentBalanceValue,
       desiredQuantity: currentQuantityValue,
-      reason: yearInfo.adjustment ? "Update adjustment" : "",
+      reason: yearInfo.reason ?? "Update adjustment",
     });
     setEditingYearHasAdjustment(
       entityType === "item"
@@ -220,6 +223,9 @@ const OpeningBalanceManagement = ({
 
   const formatNumber = (num) => new Intl.NumberFormat("en-IN").format(num || 0);
 
+
+  console.log(adjustmentForm);
+  
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -667,7 +673,7 @@ const OpeningBalanceManagement = ({
             <div className="space-y-2">
               <Label className="dark:text-zinc-300">Reason</Label>
               <Textarea
-                value={adjustmentForm.reason}
+                value={adjustmentForm.reason }
                 onChange={(e) =>
                   setAdjustmentForm({
                     ...adjustmentForm,

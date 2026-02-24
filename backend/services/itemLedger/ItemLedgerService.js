@@ -4,6 +4,11 @@ import ItemLedger from "../../model/ItemsLedgerModel.js";
 import ItemMonthlyBalance from "../../model/ItemMonthlyBalanceModel.js";
 import AdjustmentEntry from "../../model/AdjustmentEntryModel.js";
 import ItemMasterModel from "../../model/masters/ItemMasterModel.js";
+import YearOpeningAdjustment from "../../model/YearOpeningAdjustmentModel.js";
+import { getFinancialYearForDate } from "../../helpers/CommonTransactionHelper/openingBalanceHelper.js";
+import Company from "../../model/masters/CompanyModel.js";
+
+
 
 const toObjectId = (id) => new mongoose.Types.ObjectId(id);
 
@@ -125,42 +130,44 @@ export const getBatchOpeningBalances = async (
   console.log("Calculated previous month:", { prevYear, prevMonthNum });
 
   /* -----------------------------------------------------------------------
-     STEP 1: Get last CLEAN monthly balance for ALL items (look backward infinitely)
-     This finds the most recent verified snapshot before our report date
-     ----------------------------------------------------------------------- */
+     STEP 1: Get last CLEAN monthly balance for ALL items
+  ----------------------------------------------------------------------- */
+
   console.time("Step 1: Monthly balances query");
+
   const monthlyBalances = await ItemMonthlyBalance.aggregate([
     {
       $match: {
         company: companyId,
         branch: branchId,
         item: { $in: itemIdObjs },
-        needsRecalculation: false, // Only clean/verified balances
+        needsRecalculation: false,
         $or: [
           { year: { $lt: prevYear } },
           { year: prevYear, month: { $lte: prevMonthNum } },
         ],
       },
     },
-    {
-      $sort: { item: 1, year: -1, month: -1 }, // Latest first per item
-    },
+    { $sort: { item: 1, year: -1, month: -1 } },
     {
       $group: {
         _id: "$item",
-        closingStock: { $first: "$closingStock" }, // Take latest
+        closingStock: { $first: "$closingStock" },
         year: { $first: "$year" },
         month: { $first: "$month" },
       },
     },
   ]);
+
   console.timeEnd("Step 1: Monthly balances query");
   console.log("Monthly balances found:", monthlyBalances.length);
 
   /* -----------------------------------------------------------------------
-     STEP 2: For items without clean monthly balance, check if transactions exist
-     ----------------------------------------------------------------------- */
+     STEP 2: Items needing fallback
+  ----------------------------------------------------------------------- */
+
   const itemsWithBalances = monthlyBalances.map((m) => m._id.toString());
+
   const itemsNeedingFallback = itemIdObjs.filter(
     (id) => !itemsWithBalances.includes(id.toString())
   );
@@ -170,20 +177,19 @@ export const getBatchOpeningBalances = async (
   const baseBalances = {};
   const dirtyPeriodStarts = {};
 
-  // Add monthly balances to base
   monthlyBalances.forEach((mb) => {
     const itemKey = mb._id.toString();
     baseBalances[itemKey] = mb.closingStock || 0;
     dirtyPeriodStarts[itemKey] = new Date(mb.year, mb.month, 1);
-    console.log(
-      `Item ${itemKey}: Monthly balance ${mb.closingStock} from ${mb.year}-${mb.month}`
-    );
   });
 
-  // STEP 3: For remaining items, check if they have ANY transactions
+  /* -----------------------------------------------------------------------
+     STEP 3: Check transactions existence
+  ----------------------------------------------------------------------- */
+
   let itemsWithTransactions = [];
+
   if (itemsNeedingFallback.length > 0) {
-    console.time("Step 2a: Check transaction existence");
     itemsWithTransactions = await ItemLedger.aggregate([
       {
         $match: {
@@ -197,121 +203,131 @@ export const getBatchOpeningBalances = async (
         $group: {
           _id: "$item",
           earliestTransaction: { $min: "$transactionDate" },
-          hasTransactions: { $sum: 1 },
         },
       },
     ]);
-    console.timeEnd("Step 2a: Check transaction existence");
-    console.log("Items with transactions:", itemsWithTransactions.length);
   }
 
-  const itemsWithTxnIds = itemsWithTransactions.map((i) => i._id.toString());
+  /* -----------------------------------------------------------------------
+     STEP 4: Item master opening stock
+  ----------------------------------------------------------------------- */
 
-  // STEP 4: Fetch ItemMaster for ALL items needing fallback
-  // (Not just those with transactions - opening stock is needed regardless)
   let masterBalances = [];
+
   if (itemsNeedingFallback.length > 0) {
-    console.time("Step 2b: Item master query");
     masterBalances = await ItemMasterModel.aggregate([
-      {
-        $match: {
-          _id: { $in: itemsNeedingFallback },
-          company: companyId,
-        },
-      },
+      { $match: { _id: { $in: itemsNeedingFallback }, company: companyId } },
       { $unwind: "$stock" },
-      {
-        $match: {
-          "stock.branch": branchId,
-        },
-      },
-      {
-        $project: {
-          _id: 1,
-          openingStock: "$stock.openingStock",
-        },
-      },
+      { $match: { "stock.branch": branchId } },
+      { $project: { _id: 1, openingStock: "$stock.openingStock" } },
     ]);
-    console.timeEnd("Step 2b: Item master query");
-    console.log("Master balances found:", masterBalances.length);
   }
 
-  // Add master balances
   masterBalances.forEach((master) => {
     const itemKey = master._id.toString();
     baseBalances[itemKey] = master.openingStock || 0;
-    
-    // Find earliest transaction date for this item (if exists)
+
     const txnInfo = itemsWithTransactions.find(
       (i) => i._id.toString() === itemKey
     );
-    
-    // If item has transactions, dirty period starts from earliest transaction
-    // If no transactions, dirty period starts from selectedDate (so range is empty)
+
     dirtyPeriodStarts[itemKey] = txnInfo?.earliestTransaction || selectedDate;
-    console.log(
-      `Item ${itemKey}: Master opening ${master.openingStock}, dirty start ${dirtyPeriodStarts[itemKey]?.toISOString()}`
-    );
   });
 
-  // For items that don't exist in ItemMaster at all, default to 0
   itemsNeedingFallback.forEach((id) => {
     const itemKey = id.toString();
     if (baseBalances[itemKey] === undefined) {
       baseBalances[itemKey] = 0;
-      dirtyPeriodStarts[itemKey] = selectedDate; // No dirty period
-      console.log(`Item ${itemKey}: No data found, defaulting to 0`);
+      dirtyPeriodStarts[itemKey] = selectedDate;
     }
   });
 
   console.log("Base balances initialized:", Object.keys(baseBalances).length);
 
-  // Dirty period ends just before report starts
+  /* -----------------------------------------------------------------------
+     STEP 4.5: YEAR OPENING ADJUSTMENTS (ITEM)
+  ----------------------------------------------------------------------- */
+
+  const companyDoc = await Company.findById(companyId).lean();
+  const fyConfig = companyDoc?.financialYear || {};
+  const startMonth = fyConfig.startMonth || 4;
+  const startingYear = fyConfig.startingYear || 2000;
+
+  const selectedDateFY = getFinancialYearForDate(selectedDate, startMonth);
+
+  const allFYsToQuery = [];
+  for (let y = startingYear; y <= selectedDateFY; y++) {
+    allFYsToQuery.push(y.toString());
+  }
+
+  const yearOpeningAdjustments = await YearOpeningAdjustment.find({
+    entityId: { $in: itemIds },
+    entityType: "item",
+    financialYear: { $in: allFYsToQuery },
+    isCancelled: false,
+  }).lean();
+
+  const cumulativeAdjustments = {};
+
+  itemIds.forEach((itemId) => {
+    const itemKey = itemId.toString();
+    let totalAdjustment = 0;
+
+    const itemAdjustments = yearOpeningAdjustments.filter(
+      (adj) =>
+        adj.entityId?.toString() === itemKey &&
+        Number(adj.financialYear) <= selectedDateFY
+    );
+
+    itemAdjustments.forEach((adj) => {
+      totalAdjustment += Number(adj.adjustmentQuantity || 0);
+    });
+
+    if (totalAdjustment !== 0) {
+      cumulativeAdjustments[itemKey] = totalAdjustment;
+    }
+  });
+
+  Object.keys(cumulativeAdjustments).forEach((itemKey) => {
+    if (baseBalances[itemKey] !== undefined) {
+      baseBalances[itemKey] += cumulativeAdjustments[itemKey];
+    }
+  });
+
+  /* -----------------------------------------------------------------------
+     STEP 5: Dirty period ledger movements
+  ----------------------------------------------------------------------- */
+
   const dirtyPeriodEnd = new Date(selectedDate);
   dirtyPeriodEnd.setHours(0, 0, 0, 0);
 
-  console.log("Dirty period end:", dirtyPeriodEnd.toISOString());
-
-  /* -----------------------------------------------------------------------
-     STEP 5: Get ledger movements for dirty periods
-     Each item has different dirty period based on last snapshot
-     ----------------------------------------------------------------------- */
-  console.time("Step 3: Ledger movements query");
-
-  // Build $or conditions with per-item date ranges
   const ledgerMatchConditions = itemIdObjs
     .map((id) => {
       const itemKey = id.toString();
       const startDate = dirtyPeriodStarts[itemKey];
 
-      // Skip if no dirty period (e.g., no transactions exist)
-      if (!startDate || startDate >= dirtyPeriodEnd) {
-        return null;
-      }
+      if (!startDate || startDate >= dirtyPeriodEnd) return null;
 
       return {
         item: id,
-        transactionDate: {
-          $gte: startDate, // Dirty period start (different per item)
-          $lt: dirtyPeriodEnd, // Report start date (same for all)
-        },
+        transactionDate: { $gte: startDate, $lt: dirtyPeriodEnd },
       };
     })
-    .filter(Boolean); // Remove null entries
+    .filter(Boolean);
 
   let ledgerMovements = [];
+
   if (ledgerMatchConditions.length > 0) {
     ledgerMovements = await ItemLedger.aggregate([
       {
         $match: {
           company: companyId,
           branch: branchId,
-          $or: ledgerMatchConditions, // Use per-item date ranges
+          $or: ledgerMatchConditions,
         },
       },
       {
         $addFields: {
-          // Convert to signed quantity: in = +, out = -
           signedQuantity: {
             $multiply: [
               "$quantity",
@@ -324,30 +340,18 @@ export const getBatchOpeningBalances = async (
         $group: {
           _id: "$item",
           totalSignedQuantity: { $sum: "$signedQuantity" },
-          transactionCount: { $sum: 1 },
         },
       },
     ]);
   }
-  console.timeEnd("Step 3: Ledger movements query");
-  console.log("Ledger movements found:", ledgerMovements.length);
-  ledgerMovements.forEach((lm) => {
-    console.log(
-      `  Item ${lm._id}: ${lm.transactionCount} transactions, total signed qty: ${lm.totalSignedQuantity}`
-    );
-  });
 
   /* -----------------------------------------------------------------------
-     STEP 6: Get adjustments (all adjustments before selectedDate)
-     Adjustments modify original transactions, need to apply deltas
-     ----------------------------------------------------------------------- */
-  console.time("Step 4: Adjustment movements query");
+     STEP 6: AdjustmentEntry deltas
+  ----------------------------------------------------------------------- */
 
   const adjustmentMatchConditions = itemIdObjs.map((id) => ({
     "itemAdjustments.item": id,
-    originalTransactionDate: {
-      $lt: selectedDate,
-    },
+    originalTransactionDate: { $lt: selectedDate },
   }));
 
   const adjustmentMovements = await AdjustmentEntry.aggregate([
@@ -360,14 +364,9 @@ export const getBatchOpeningBalances = async (
       },
     },
     { $unwind: "$itemAdjustments" },
-    {
-      $match: {
-        $or: adjustmentMatchConditions,
-      },
-    },
+    { $match: { $or: adjustmentMatchConditions } },
     {
       $addFields: {
-        // Calculate signed delta based on transaction type
         signedQuantityDelta: {
           $multiply: [
             "$itemAdjustments.quantityDelta",
@@ -381,7 +380,7 @@ export const getBatchOpeningBalances = async (
                         ["Sale", "PurchaseReturn"],
                       ],
                     },
-                    then: -1, // Sales reduce stock
+                    then: -1,
                   },
                   {
                     case: {
@@ -390,7 +389,7 @@ export const getBatchOpeningBalances = async (
                         ["Purchase", "SalesReturn"],
                       ],
                     },
-                    then: 1, // Purchases increase stock
+                    then: 1,
                   },
                 ],
                 default: 1,
@@ -407,53 +406,31 @@ export const getBatchOpeningBalances = async (
       },
     },
   ]);
-  console.timeEnd("Step 4: Adjustment movements query");
-  console.log("Adjustment movements found:", adjustmentMovements.length);
-  adjustmentMovements.forEach((am) => {
-    console.log(`  Item ${am._id}: adjustment delta ${am.totalSignedQtyDelta}`);
-  });
 
   /* -----------------------------------------------------------------------
-     STEP 7: Combine all data to calculate final opening balances
-     Formula: opening = base + ledgerMovements + adjustments
-     ----------------------------------------------------------------------- */
-  console.log("Step 5: Combining all data");
+     STEP 7: Combine all
+  ----------------------------------------------------------------------- */
+
   const finalBalances = {};
 
   itemIdObjs.forEach((id) => {
     const itemKey = id.toString();
     let balance = baseBalances[itemKey] || 0;
-    const baseBalance = balance;
 
-    // Add ledger movements
     const ledgerMove = ledgerMovements.find(
       (m) => m._id.toString() === itemKey
     );
-    let ledgerMovement = 0;
-    if (ledgerMove) {
-      ledgerMovement = ledgerMove.totalSignedQuantity;
-      balance += ledgerMovement;
-    }
+    if (ledgerMove) balance += ledgerMove.totalSignedQuantity;
 
-    // Add adjustment deltas
     const adjMove = adjustmentMovements.find(
       (m) => m._id.toString() === itemKey
     );
-    let adjustmentMovement = 0;
-    if (adjMove) {
-      adjustmentMovement = adjMove.totalSignedQtyDelta;
-      balance += adjustmentMovement;
-    }
+    if (adjMove) balance += adjMove.totalSignedQtyDelta;
 
     finalBalances[itemKey] = balance;
-
-    console.log(
-      `Item ${itemKey} final: ${baseBalance} (base) + ${ledgerMovement} (ledger) + ${adjustmentMovement} (adj) = ${balance}`
-    );
   });
 
-  console.log("Final balances computed:", Object.keys(finalBalances).length);
-  console.log("=== getBatchOpeningBalances END ===\n");
+  console.log("=== getBatchOpeningBalances END ===");
 
   return finalBalances;
 };

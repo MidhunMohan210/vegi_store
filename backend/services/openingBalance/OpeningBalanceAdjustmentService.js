@@ -264,6 +264,7 @@ const OpeningBalanceService = {
           isLocked: false,
           isCurrent: y === currentFY,
           pendingAdjustment: pendingDelta,
+          reason: adjustment?.reason || null,
         };
 
         // --- OPENING BALANCE ---
@@ -503,6 +504,7 @@ const OpeningBalanceService = {
         pendingAdjustmentQuantity: pendingQty,
 
         closingQuantity: closingQty,
+        reason: adj.reason || null,
 
         isLocked: false,
         isCurrent: y === currentFY,

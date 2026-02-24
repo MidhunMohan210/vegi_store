@@ -382,7 +382,7 @@ const ItemMasterForm = ({ selectedItem, isEditMode, onSuccess, onCancel }) => {
                   type="button"
                   onClick={() => setShowOpeningBalanceModal(true)}
                   disabled={isLoading}
-                  className="w-full bg-slate-100 border-2 border-blue-200 text-blue-700 text-sm font-bold py-4 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-all flex items-center justify-center gap-2.5 shadow-sm disabled:opacity-70 disabled:cursor-not-allowed"
+                  className="w-full bg-slate-100 border-2 border-blue-200 text-blue-700 text-xs font-bold py-3 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-all flex items-center justify-center gap-2.5 shadow-sm disabled:opacity-70 disabled:cursor-not-allowed"
                 >
                   <FileBarChart className="w-4 h-4" />
                   Manage Year-wise Opening Balances
