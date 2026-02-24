@@ -511,7 +511,7 @@ const OpeningBalanceManagement = ({
                             {year?.closingQuantity || 0}
                           </td> */}
                           <td className="py-3 px-4 text-center">
-                            {!year.isLocked ? (
+                            {year.source!=="master" ? (
                               <Button
                                 size="sm"
                                 variant="outline"
