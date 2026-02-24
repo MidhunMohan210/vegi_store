@@ -13,9 +13,19 @@ import { nanoid } from "nanoid";
 import { calculateReceiptPaymentTotals } from "../../helpers/transactionHelpers/outstandingService.js";
 import ItemMaster from "../../model/masters/ItemMasterModel.js";
 import ItemMonthlyBalance from "../../model/ItemMonthlyBalanceModel.js";
-import { PurchaseModel } from "../../model/TransactionModel.js";
 
 const PAGE_SIZE = 5;
+
+const getStockSign = (model) => {
+  const map = {
+    Sale: -1,
+    SalesReturn: 1,
+    Purchase: 1,
+    PurchaseReturn: -1,
+    StockAdjustment: 1,
+  };
+  return map[model] || 1;
+};
 
 // Helper: get FY label (number) for a given Date and FY startMonth
 
@@ -109,7 +119,6 @@ const OpeningBalanceService = {
         })),
       );
 
-      // 5. Pending AdjustmentEntry deltas (not yet pushed to ledger)
       // 5. Pending AdjustmentEntry deltas (not yet pushed to ledger)
       const pendingAdjustments = await AdjustmentEntryModel.find({
         affectedAccount: entityId,
@@ -350,33 +359,77 @@ const OpeningBalanceService = {
   // ======================================================
 
   getYearWiseItemBalances: async (itemId, companyId, branchId, page = 1) => {
-    const company = await Company.findById(companyId).lean();
-    const startMonth = company?.financialYear?.startMonth || 4;
-    const startingYear = company?.financialYear?.startingYear || 2000;
+    const company = (await Company.findById(companyId).lean()) || {};
 
-    const item = await ItemMaster.findById(itemId).lean();
-    const branchStock = item?.stock?.find(
-      (s) => s.branch.toString() === branchId.toString(),
-    );
+    const startMonth = company?.financialYear?.startMonth ?? 4;
+    const startingYear = company?.financialYear?.startingYear ?? 2000;
 
-    const masterOpeningQty = branchStock?.openingStock || 0;
-    const masterOpeningRate = branchStock?.openingRate || 0;
+    const item = (await ItemMaster.findById(itemId).lean()) || {};
 
-    const monthlyBalances = await ItemMonthlyBalance.find({
-      item: itemId,
-      company: companyId,
-      branch: branchId,
-    })
-      .sort({ year: 1, month: 1 })
-      .lean();
+    const branchStock =
+      item?.stock?.find((s) => s.branch?.toString() === branchId?.toString()) ||
+      {};
 
-    const adjustments = await YearOpeningAdjustment.find({
-      entityId: itemId,
-      entityType: "item",
-      company: companyId,
-      branch: branchId,
-      isCancelled: false,
-    }).lean();
+    const masterOpeningQty = Number(branchStock?.openingStock) || 0;
+
+    /* ---------------- MONTHLY ---------------- */
+
+    const monthlyBalances =
+      (await ItemMonthlyBalance.find({
+        item: itemId,
+        company: companyId,
+        branch: branchId,
+      })
+        .sort({ year: 1, month: 1 })
+        .lean()) || [];
+
+    /* ---------------- YEAR OPENING ADJUSTMENTS ---------------- */
+
+    const adjustments =
+      (await YearOpeningAdjustment.find({
+        entityId: itemId,
+        entityType: "item",
+        company: companyId,
+        branch: branchId,
+        isCancelled: false,
+      }).lean()) || [];
+
+    /* ---------------- PENDING ADJUSTMENT ENTRIES ---------------- */
+
+    const pendingAdjustments =
+      (await AdjustmentEntryModel.find({
+        branch: branchId,
+        status: "active",
+        isReversed: false,
+        "itemAdjustments.item": itemId,
+      }).lean()) || [];
+
+    const pendingByFY = new Map();
+
+    pendingAdjustments.forEach((adj) => {
+      const fy = getFinancialYearForDate(
+        new Date(adj.originalTransactionDate),
+        startMonth,
+      ).toString();
+
+      let totalQtyDelta = 0;
+
+      adj.itemAdjustments.forEach((it) => {
+        if (it.item?.toString() === itemId.toString()) {
+          totalQtyDelta += Number(it.quantityDelta || 0);
+        }
+      });
+
+      const sign = getStockSign(adj.originalTransactionModel);
+
+      const signedQty = totalQtyDelta * sign;
+
+      if (!pendingByFY.has(fy)) pendingByFY.set(fy, 0);
+
+      pendingByFY.set(fy, pendingByFY.get(fy) + signedQty);
+    });
+
+    /* ---------------- FY MAP ---------------- */
 
     const fyMap = new Map();
 
@@ -396,8 +449,9 @@ const OpeningBalanceService = {
     for (let y = startingYear; y <= currentFY; y++) allFYs.push(y);
     allFYs.reverse();
 
-    const totalPages = Math.ceil(allFYs.length / PAGE_SIZE);
+    const totalPages = Math.max(1, Math.ceil(allFYs.length / PAGE_SIZE));
     const safePage = Math.min(Math.max(1, page), totalPages);
+
     const pageFYs = allFYs.slice(
       (safePage - 1) * PAGE_SIZE,
       safePage * PAGE_SIZE,
@@ -405,82 +459,69 @@ const OpeningBalanceService = {
 
     const maxFY = Math.max(...pageFYs);
 
+    /* ---------------- BUILD CHAIN ---------------- */
+
     const chain = [];
     let previousClosingQty = null;
 
     for (let y = startingYear; y <= maxFY; y++) {
       const fyStr = y.toString();
       const months = fyMap.get(fyStr) || [];
-      const adj = adjustments.find((a) => a.financialYear === fyStr);
+
+      const adj = adjustments.find((a) => a.financialYear === fyStr) || {};
+
+      const pendingQty = pendingByFY.get(fyStr) || 0;
+
+      const openingQty = previousClosingQty ?? masterOpeningQty ?? 0;
+
+      const adjustmentQty = Number(adj?.adjustmentQuantity) || 0;
+
+      let movement = 0;
+
+      if (months.length > 0) {
+        months.sort((a, b) => a.month - b.month);
+
+        const firstOpening = Number(months[0]?.openingStock) || 0;
+        const lastClosing =
+          Number(months[months.length - 1]?.closingStock) || 0;
+
+        movement = lastClosing - firstOpening;
+      }
+
+      const effectiveQty = openingQty + adjustmentQty;
+
+      const closingQty = effectiveQty + movement + pendingQty;
 
       const node = {
         financialYear: fyStr,
         source: y === startingYear ? "master" : "carryForward",
 
-        openingQuantity: previousClosingQty ?? masterOpeningQty,
-        openingValue: 0,
+        openingQuantity: openingQty,
+        adjustmentQuantity: adjustmentQty,
+        effectiveQuantity: effectiveQty,
 
-        adjustmentQuantity: adj?.adjustmentQuantity || 0,
-        adjustmentValue: adj?.adjustmentAmount || 0,
+        pendingAdjustmentQuantity: pendingQty,
 
-        effectiveQuantity: 0,
-        effectiveValue: 0,
+        closingQuantity: closingQty,
 
-        closingQuantity: 0,
         isLocked: false,
         isCurrent: y === currentFY,
       };
 
-      node.effectiveQuantity = node.openingQuantity + node.adjustmentQuantity;
-
-      let movement = 0;
-
-      if (months.length) {
-        months.sort((a, b) => a.month - b.month);
-        movement =
-          (months[months.length - 1].closingStock || 0) -
-          (months[0].openingStock || 0);
-      }
-
-      node.closingQuantity = node.effectiveQuantity + movement;
-
-      previousClosingQty = node.closingQuantity;
-
-      // Last purchase rate
-      const fyStart = new Date(y, startMonth - 1, 1);
-      const fyEnd = new Date(y + 1, startMonth - 1, 0);
-
-      const lastPurchase = await PurchaseModel.findOne({
-        company: companyId,
-        branch: branchId,
-        isCancelled: false,
-        transactionDate: { $gte: fyStart, $lte: fyEnd },
-        "items.item": itemId,
-      })
-        .sort({ transactionDate: -1 })
-        .lean();
-
-      let rate = masterOpeningRate;
-
-      if (lastPurchase) {
-        const line = lastPurchase.items.find(
-          (i) => i.item.toString() === itemId.toString(),
-        );
-        if (line?.rate) rate = line.rate;
-      }
-
-      node.openingValue = masterOpeningRate * node.openingQuantity;
-
-      node.effectiveValue = rate * node.effectiveQuantity;
+      previousClosingQty = closingQty;
 
       chain.push(node);
     }
+
+    /* ---------------- DISPLAY ---------------- */
 
     const displayYears = chain.filter((n) =>
       pageFYs.includes(Number(n.financialYear)),
     );
 
-    displayYears.sort((a, b) => b.financialYear - a.financialYear);
+    displayYears.sort(
+      (a, b) => Number(b.financialYear) - Number(a.financialYear),
+    );
 
     return {
       years: displayYears,

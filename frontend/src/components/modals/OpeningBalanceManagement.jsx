@@ -414,27 +414,27 @@ const OpeningBalanceManagement = ({
                         <th className="text-right py-3 px-4 text-xs font-semibold text-slate-700 dark:text-zinc-300">
                           Opening Qty
                         </th>
-                        <th className="text-right py-3 px-4 text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                        {/* <th className="text-right py-3 px-4 text-xs font-semibold text-slate-700 dark:text-zinc-300">
                           Opening Value
-                        </th>
+                        </th> */}
                         <th className="text-right py-3 px-4 text-xs font-semibold text-slate-700 dark:text-zinc-300">
                           Adj Qty
                         </th>
-                        <th className="text-right py-3 px-4 text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                        {/* <th className="text-right py-3 px-4 text-xs font-semibold text-slate-700 dark:text-zinc-300">
                           Adj Value
-                        </th>
+                        </th> */}
                         <th className="text-right py-3 px-4 text-xs font-semibold text-slate-700 dark:text-zinc-300">
                           Effective Qty
                         </th>
-                        <th className="text-right py-3 px-4 text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                        {/* <th className="text-right py-3 px-4 text-xs font-semibold text-slate-700 dark:text-zinc-300">
                           Effective Value
-                        </th>
+                        </th> */}
                         <th className="text-right py-3 px-4 text-xs font-semibold text-slate-700 dark:text-zinc-300">
                           Closing Qty
                         </th>
-                        <th className="text-right py-3 px-4 text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                        {/* <th className="text-right py-3 px-4 text-xs font-semibold text-slate-700 dark:text-zinc-300">
                           Closing Value
-                        </th>
+                        </th> */}
                         <th className="text-center py-3 px-4 text-xs font-semibold text-slate-700 dark:text-zinc-300">
                           Actions
                         </th>
@@ -459,9 +459,9 @@ const OpeningBalanceManagement = ({
                           <td className="py-3 px-4 text-right text-sm text-slate-900 dark:text-zinc-200">
                             {formatNumber(year.openingQuantity)}
                           </td>
-                          <td className="py-3 px-4 text-right text-sm text-slate-900 dark:text-zinc-200">
+                          {/* <td className="py-3 px-4 text-right text-sm text-slate-900 dark:text-zinc-200">
                             {formatCurrency(year.openingValue)}
-                          </td>
+                          </td> */}
                           <td className="py-3 px-4 text-right text-sm">
                             {year.adjustmentQuantity ? (
                               <span
@@ -480,7 +480,7 @@ const OpeningBalanceManagement = ({
                               </span>
                             )}
                           </td>
-                          <td className="py-3 px-4 text-right text-sm">
+                          {/* <td className="py-3 px-4 text-right text-sm">
                             {year.adjustmentValue ? (
                               <span
                                 className={`${
@@ -497,19 +497,19 @@ const OpeningBalanceManagement = ({
                                 —
                               </span>
                             )}
-                          </td>
+                          </td> */}
                           <td className="py-3 px-4 text-right text-sm font-bold text-blue-600 dark:text-blue-400">
                             {formatNumber(year.effectiveQuantity)}
                           </td>
-                          <td className="py-3 px-4 text-right text-sm font-bold text-blue-600 dark:text-blue-400">
+                          {/* <td className="py-3 px-4 text-right text-sm font-bold text-blue-600 dark:text-blue-400">
                             {formatCurrency(year.effectiveValue)}
-                          </td>
+                          </td> */}
                           <td className="py-3 px-4 text-right text-sm font-bold text-blue-600 dark:text-blue-400">
                             {year?.closingQuantity || 0}
                           </td>
-                          <td className="py-3 px-4 text-right text-sm font-bold text-blue-600 dark:text-blue-400">
+                          {/* <td className="py-3 px-4 text-right text-sm font-bold text-blue-600 dark:text-blue-400">
                             {year?.closingQuantity || 0}
-                          </td>
+                          </td> */}
                           <td className="py-3 px-4 text-center">
                             {!year.isLocked ? (
                               <Button
@@ -643,7 +643,7 @@ const OpeningBalanceManagement = ({
               </p>
             </div>
 
-            {entityType === "item" && (
+            {/* {entityType === "item" && (
               <div className="space-y-2">
                 <Label className="dark:text-zinc-300">
                   Desired Opening Value
@@ -663,7 +663,7 @@ const OpeningBalanceManagement = ({
                   Optional. Use this to adjust opening value separately.
                 </p>
               </div>
-            )}
+            )} */}
             <div className="space-y-2">
               <Label className="dark:text-zinc-300">Reason</Label>
               <Textarea
